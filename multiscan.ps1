@@ -4,8 +4,8 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$File,
-    [string]$VTApiKey = "184d695fb72c68241b9dfe2d956e471f882754e906118c819d337af9b67fbe59",
-    [string]$MetaDefenderApiKey = ""  # Free API key from opswat.com
+    [string]$VTApiKey = $env:VT_API_KEY,
+    [string]$MetaDefenderApiKey = $env:METADEFENDER_API_KEY
 )
 
 $ErrorActionPreference = "Continue"
