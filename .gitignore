@@ -1,0 +1,28 @@
+# Compiled binaries
+*.exe
+nautilus-server
+nautilus-implant
+*.bin
+*.dll
+*.so
+*.dylib
+*~
+fish_*
+build/
+
+# Build cache
+.garble_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+/tmp/
+*.tmp

