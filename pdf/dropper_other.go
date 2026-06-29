@@ -1,5 +1,5 @@
 //go:build !windows
 
-package evasion
+package main
 
 func DropAndOpenPDF() {}

