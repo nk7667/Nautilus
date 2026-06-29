@@ -10,6 +10,14 @@ nautilus-implant
 fish_*
 build/
 
+# Build artifacts
+*.7z
+*.zip
+*.pfx
+.rsrc.json
+rsrc.syso
+app.exe.manifest
+
 # Build cache
 .garble_cache/
 
@@ -26,3 +34,8 @@ Thumbs.db
 # Temp
 /tmp/
 *.tmp
+version.txt
+
+# External clones (kept for reference, not built)
+Evasion-SubAgents-main/
+knowledge-base/
