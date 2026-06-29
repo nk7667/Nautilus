@@ -24,12 +24,15 @@ func handlePayload(params map[string]string) string {
 		xorKey = byte(k)
 	}
 
+	// 转换为byte切片
+	payloadBytes := []byte(payloadB64)
+
 	var err error
 	switch method {
 	case "vprotect":
-		err = core.LoadModAlt(payloadB64, xorKey)
+		err = core.LoadModAlt(payloadBytes, xorKey)
 	default:
-		err = core.LoadMod(payloadB64, xorKey)
+		err = core.LoadMod(payloadBytes, xorKey)
 	}
 
 	if err != nil {

