@@ -18,7 +18,7 @@ param(
     [string]$PdfName = "report"
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 $env:GOOS = $Platform
 $env:GOARCH = $Arch
@@ -55,7 +55,7 @@ Write-Host "[+] Chain: $chainLabel (target: $buildTarget)"
 if ($Garble) {
     Write-Host "[+] Garble compilation enabled"
     $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = "1"
-    garble -tiny -literals -seed=random -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
+    garble -tiny -literals -seed=random build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 } else {
     go build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 }
