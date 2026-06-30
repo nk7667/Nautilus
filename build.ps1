@@ -16,7 +16,7 @@ param(
     [switch]$SkipPost = $false,
     [ValidateSet("lnk", "pdf")]
     [string]$Chain = "lnk",
-    [string]$PdfName = "报告"   # PDF链路的伪装文件名（不含扩展名）
+    [string]$PdfName = "report"   # disguise filename for PDF chain (no ext)
 )
 
 $ErrorActionPreference = "Stop"
