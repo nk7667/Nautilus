@@ -54,14 +54,8 @@ Write-Host "[+] Chain: $chainLabel (target: $buildTarget)"
 
 if ($Garble) {
     Write-Host "[+] Garble compilation enabled"
-    $garbleArgs = "garble -tiny -literals"
-    if ($GarbleSeed) {
-        $garbleArgs = "$garbleArgs -seed=$GarbleSeed"
-    } else {
-        $garbleArgs = "$garbleArgs -seed=random"
-    }
     $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = "1"
-    go $garbleArgs -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
+    garble -tiny -literals -seed=random -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 } else {
     go build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 }
