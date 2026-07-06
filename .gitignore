@@ -26,6 +26,11 @@ app.exe.manifest
 .vscode/
 *.swp
 *.swo
+.trae/
+
+# Build artifacts (additions)
+challenge.zip
+challenge.7z
 
 # OS
 .DS_Store

