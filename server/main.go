@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -272,9 +273,10 @@ func (s *Server) handleConsole() {
 	fmt.Println("Commands: sessions, use <id>, exec <cmd>, ps <cmd>, listdir <path>, sysinfo, privinfo, proclist, kill <pid>, exit")
 	fmt.Print("> ")
 
+	reader := bufio.NewReader(os.Stdin)
 	for {
-		var input string
-		fmt.Scanln(&input)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
 
 		parts := strings.SplitN(input, " ", 2)
 		cmd := parts[0]

