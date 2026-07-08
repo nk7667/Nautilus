@@ -55,7 +55,8 @@ Nautilus 是一个从零构建的轻量级红队 C2（Command & Control）框架
 | **Ntdll Unhook** | 从磁盘读干净ntdll → 覆盖.text段（通过直接syscall） | 脱掉EDR inline hook |
 | **回调执行** | EnumWindows/EnumChildWindows回调执行shellcode | 绕过syscall调用监控 |
 | **RW→RX权限翻转** | 先RW分配 → 写入 → 再改RX | 避免RWX页面特征 |
-| **Sleep混淆** | Sleep期间XOR加密内存区域 | 防止内存扫描 |
+| **Ekko Sleep加密 (P1)** | 休眠期加密模块数据页(.data/.rdata/.bss)，Timer Queue唤醒后解密 | 绕过EDR内存扫描 |
+| **功能伪装** | 启动后打开诱饵文件(notepad/PDF) | 转移用户注意力 |
 | **反沙箱** | 物理内存/CPU核数/运行时间/用户名/调试器 | 阻止沙箱分析 |
 | **Import表稀释** | 额外导入大量合法Win32 API | 降低敏感API密度 |
 
@@ -64,7 +65,9 @@ Nautilus 是一个从零构建的轻量级红队 C2（Command & Control）框架
 | 技术 | 实现 | 效果 |
 |------|------|------|
 | **Garble -literals** | 编译期字符串加密 | 消除所有Go字符串特征 |
-| **Garble -controlflow** | 控制流混淆（block splitting + junk jumps） | 破坏逆向分析 |
+| **Garble -controlflow** | 控制流混淆（block splitting + junk jumps + flattening） | 破坏逆向分析 |
+| **Garble -seed=random** | 每次构建不同种子，不同SHA256 | 避免哈希规则匹配 |
+| **Pclntab混淆 (P0)** | Go 1.25+ `-pclntab=empty` 移除函数符号表（Go运行时仍然工作） | 消除Go二进制最大特征 |
 | **String Zeroing** | 后处理清零敏感字符串（Go build ID、API名等） | 破坏YARA字符串规则 |
 | **Rich Header Clear** | 清除Go编译器指纹 | 破坏编译器识别 |
 | **PE Timestamp Patch** | 修改PE时间戳 | 破坏基于时间戳的家族分类 |
@@ -127,7 +130,8 @@ nautilus/
 │   ├── edr_bypass_windows.go  # AMSI+ETW bypass
 │   ├── unhook_windows.go      # Ntdll unhook from disk
 │   ├── legitimate_apis_windows.go # Import表稀释
-│   ├── sleep_obfuscation_windows.go # Sleep内存加密
+│   ├── sleep_obfuscation_windows.go # Sleep XOR加密(旧)
+│   ├── sleep_ekko_windows.go   # Ekko Sleep加密(P1新)
 │   ├── crypto.go              # AES-GCM + Base64
 │   ├── sandbox.go             # 反沙箱检测
 │   └── pe.go                  # PE结构操作
@@ -148,7 +152,27 @@ nautilus/
     └── doc.ico                 # 文档图标
 ```
 
-## 快速开始
+### LNK链路免杀 (v4)
+
+| 改动 | 说明 | 规避的检测 |
+|------|------|------------|
+| TargetPath=`wscript.exe` | 替代 cmd.exe 作为LNK目标 | 消除 cmd.exe YARA 规则 |
+| Arguments=Base64 VBS | `update.vbs` 启动 payload + 诱饵 | 消除 .bat 字符串规则 |
+| 目录名 `assets\data` | 替代 `__MACOSX\.note` | 消除 __MACOSX YARA 规则 |
+| ExpString 欺骗 | 显示 `notepad.exe` 文件名 | CVE-2025-9491 欺骗 |
+| Zone.Identifier 清除 | 删除 NTFS alternate data stream | 消除 Elastic 下载检测 |
+| WindowStyle=1 | 替代最小化窗口 | 消除最小化 LNK YARA 规则 |
+
+### 沙箱检测结果
+
+| 链路 | 平台 | 得分 | 检出签名 | 结果 |
+|------|------|------|----------|------|
+| **PDF链路** (`简历.pdf.exe`) | 微步云沙箱 (Win10 1903) | 0.8/10 | 1个: `getsysteminfo` (severity=1) | ✅ 极低风险 |
+| **LNK链路** (`challenge.lnk`) | 微步云沙箱 (Win10 1903) | 1.0/10 | 1个: `getsysteminfo` (severity=1) | ✅ 极低风险 |
+
+> 唯一条目为最低级别的"获取系统信息"签名，正常程序均可能触发，非恶意指标。
+
+## 使用说明
 
 ### 构建（所有免杀功能）
 
