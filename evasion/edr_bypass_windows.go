@@ -49,13 +49,16 @@ func patchMem(addr uintptr, patch []byte) {
 	var oldProtect uint32
 
 	// 使用间接系统调用绕过用户态Hook
-	CallNtPVM(
+	status := CallNtPVM(
 		uintptr(0xFFFFFFFFFFFFFFFF), // 当前进程
 		&baseAddr,
 		&regionSize,
 		0x40, // PAGE_EXECUTE_READWRITE
 		&oldProtect,
 	)
+	if status != 0 {
+		return // NtPVM失败，跳过写入
+	}
 	copy(unsafe.Slice((*byte)(unsafe.Pointer(addr)), len(patch)), patch)
 
 	// 恢复原始保护

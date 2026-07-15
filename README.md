@@ -14,7 +14,7 @@ Nautilus 是一个从零构建的轻量级红队 C2（Command & Control）框架
 
 | 链路 | 入口 | 流程 | 诱饵 |
 |------|------|------|------|
-| **LNK** | `challenge.lnk` | LNK → cmd.exe → run.bat → payload + notepad decoy | CTF_challenge.txt |
+| **LNK** | `challenge.lnk` | LNK → wscript.exe → update.vbs → payload + notepad decoy | CTF_challenge.txt |
 | **PDF** | `简历.pdf.exe` | 双击 → 释放 decoy.pdf + 弹出 PDF + C2 连接 | 简历.pdf (内嵌) |
 
 ### 架构
@@ -194,7 +194,8 @@ nautilus/
 | `-C2Addr` | C2服务器地址 (默认 `https://192.168.1.1:8443`) |
 | `-Garble` | 启用 garble 编译混淆 |
 | `-ControlFlow` | 启用控制流混淆 (需要 `-Garble`) |
-| `-EnableStringZero` | 启用敏感字符串清零 |
+| `-EnableStringZero` | 启用敏感字符串清零（安全级，不影响调试） |
+| `-DeepStringZero` | 启用深度清零（发布级，清零Go runtime内部字符串，输出fish_release.exe） |
 | `-SignSource <path>` | Authenticode签名克隆源文件 |
 | `-Chain pdf` | 使用PDF链路 (默认lnk) |
 | `-PdfName <name>` | PDF链路文件名 (默认report) |
@@ -251,6 +252,23 @@ exit              # 退出
 | 权限信息 | privinfo | 获取当前权限 |
 | 系统信息 | sysinfo | 系统详情(主机名/IP/OS等) |
 | 载荷执行 | payload | 远程shellcode执行 |
+| 进程注入 | inject | 注入shellcode到目标进程 |
+| 截屏 | screenshot | 捕获桌面截图(PNG) |
+| 键盘记录 | keylogon/off | 启动/停止按键捕获 |
+| Token枚举 | tokens | 列出所有进程Token信息 |
+| Token窃取 | steal-token | 窃取目标进程Token并模拟 |
+| Token恢复 | rev2self | 恢复原始进程身份 |
+| Token伪造 | make-token | 用凭据创建新Token |
+
+### VirusTotal 检测结果
+
+| 构建配置 | 检出率 | 说明 |
+|---------|--------|------|
+| 后处理(无Garble) | 11/72 | BitDefender族(7 OEM) + ClamAV/Sliver |
+| Garble(-literals) + 后处理 | 5/70 | ClamAV + CrowdStrike + Elastic + Malwarebytes + Symantec |
+| **Garble + 后处理 + 深度清零(发布版)** | **4/70** | Bkav Pro + ClamAV/Sliver + Malwarebytes + Symantec |
+
+> CrowdStrike 和 Elastic 在深度清零版中消失。Microsoft Defender、Kaspersky、ESET、Sophos 等大厂 EDR **全部通过**。
 
 ## GitHub
 
